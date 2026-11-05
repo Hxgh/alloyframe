@@ -1,0 +1,147 @@
+{
+  "$schema": "./profiles.schema.json",
+  "version": 1,
+  "note": "铝型材库。massPerMetre 与 inertia 为行业公开资料估算值，采购前必须以供应商实测手册核对。source 字段标明每个数字的来源等级：supplier=供应商手册，estimate=公开资料估算。",
+  "profiles": [
+    {
+      "id": "2020",
+      "name": "2020 欧标",
+      "series": 20,
+      "section": {
+        "w": 20,
+        "h": 20
+      },
+      "slot": {
+        "open": 6,
+        "cavity": 8,
+        "lip": 1.4,
+        "neck": 2.4,
+        "depth": 5.6,
+        "bore": 4.2
+      },
+      "massPerMetre": 0.42,
+      "inertia": 6800,
+      "area": 178,
+      "pricePerMetre": 16,
+      "currency": "CNY",
+      "source": "estimate",
+      "commonUses": [
+        "小型框架",
+        "轻型置物架",
+        "3D 打印机架"
+      ]
+    },
+    {
+      "id": "3030",
+      "name": "3030 欧标",
+      "series": 30,
+      "section": {
+        "w": 30,
+        "h": 30
+      },
+      "slot": {
+        "open": 6.2,
+        "cavity": 8.2,
+        "lip": 1.5,
+        "neck": 2.6,
+        "depth": 6.4,
+        "bore": 6.8
+      },
+      "massPerMetre": 0.82,
+      "inertia": 27200,
+      "area": 352,
+      "pricePerMetre": 26,
+      "currency": "CNY",
+      "source": "estimate",
+      "commonUses": [
+        "中型框架",
+        "工作台",
+        "展示架"
+      ]
+    },
+    {
+      "id": "4040",
+      "name": "4040 欧标",
+      "series": 40,
+      "section": {
+        "w": 40,
+        "h": 40
+      },
+      "slot": {
+        "open": 6.2,
+        "cavity": 8.2,
+        "lip": 1.5,
+        "neck": 2.6,
+        "depth": 6.8,
+        "bore": 8.2
+      },
+      "massPerMetre": 1.35,
+      "inertia": 133000,
+      "area": 660,
+      "pricePerMetre": 38,
+      "currency": "CNY",
+      "source": "estimate",
+      "commonUses": [
+        "重型工作台",
+        "升降桌框架",
+        "设备机架",
+        "自动化设备"
+      ]
+    },
+    {
+      "id": "4080",
+      "name": "4080 欧标",
+      "series": 40,
+      "section": {
+        "w": 40,
+        "h": 80
+      },
+      "slot": {
+        "open": 6.2,
+        "cavity": 8.2,
+        "lip": 1.5,
+        "neck": 2.6,
+        "depth": 6.8,
+        "bore": 8.2
+      },
+      "massPerMetre": 2.65,
+      "inertia": 620000,
+      "area": 1245,
+      "pricePerMetre": 72,
+      "currency": "CNY",
+      "source": "estimate",
+      "commonUses": [
+        "大跨度横梁",
+        "重载台面",
+        "龙门架"
+      ]
+    },
+    {
+      "id": "4545",
+      "name": "4545 欧标",
+      "series": 45,
+      "section": {
+        "w": 45,
+        "h": 45
+      },
+      "slot": {
+        "open": 10.2,
+        "cavity": 12.2,
+        "lip": 1.8,
+        "neck": 3,
+        "depth": 8.4,
+        "bore": 10.2
+      },
+      "massPerMetre": 1.85,
+      "inertia": 139600,
+      "area": 778,
+      "pricePerMetre": 46,
+      "currency": "CNY",
+      "source": "estimate",
+      "commonUses": [
+        "重载框架",
+        "与欧标配件通用的加强截面"
+      ]
+    }
+  ]
+}

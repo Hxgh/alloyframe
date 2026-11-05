@@ -1,0 +1,117 @@
+{
+  "$schema": "./accessories.schema.json",
+  "version": 1,
+  "note": "配件库。qty 在 design.json 中按 id 引用。价格为估算，采购前需询价。",
+  "accessories": [
+    {
+      "id": "bracket-outer-4040",
+      "name": "4040 外置角码",
+      "category": "连接件",
+      "fitsSlot": ["4040", "4080"],
+      "unitPrice": 8,
+      "unit": "个",
+      "commonUses": ["直角连接", "框体转角"],
+      "note": "最常用。外露，可拆。每角 2 颗螺栓。"
+    },
+    {
+      "id": "bracket-inner-4040",
+      "name": "4040 内置角码",
+      "category": "连接件",
+      "fitsSlot": ["4040", "4080"],
+      "unitPrice": 12,
+      "unit": "个",
+      "commonUses": ["隐藏式直角连接"],
+      "note": "嵌入槽内，外观整洁。需在加工时预装，后期调整困难。"
+    },
+    {
+      "id": "profile-connector-4040",
+      "name": "4040 内嵌连接条",
+      "category": "连接件",
+      "fitsSlot": ["4040"],
+      "unitPrice": 15,
+      "unit": "套",
+      "commonUses": ["同轴接长", "对拼连接"],
+      "note": "两根型材端面对接。适合超过 6 米需接长的情况。"
+    },
+    {
+      "id": "tnut-m8",
+      "name": "M8 T 型螺母",
+      "category": "紧固件",
+      "fitsSlot": ["4040", "4080", "4545"],
+      "unitPrice": 0.6,
+      "unit": "个",
+      "commonUses": ["槽内螺栓固定", "配件安装"],
+      "note": "标准菱形 T 螺母。配 M8 内六角螺栓。"
+    },
+    {
+      "id": "tnut-m6",
+      "name": "M6 T 型螺母",
+      "category": "紧固件",
+      "fitsSlot": ["3030", "4040"],
+      "unitPrice": 0.4,
+      "unit": "个",
+      "commonUses": ["轻型配件固定"],
+      "note": "常用于 30 系及轻型附件。"
+    },
+    {
+      "id": "spring-tnut-m8",
+      "name": "M8 弹片螺母",
+      "category": "紧固件",
+      "fitsSlot": ["4040", "4080", "4545"],
+      "unitPrice": 1.2,
+      "unit": "个",
+      "commonUses": ["任意位置固定", "免穿端安装"],
+      "note": "可从槽口任意位置压入，不需要从端头滑入。装配便利性显著提升。"
+    },
+    {
+      "id": "bolt-m8x20",
+      "name": "M8×20 内六角螺栓",
+      "category": "紧固件",
+      "fitsSlot": ["4040", "4080", "4545"],
+      "unitPrice": 0.5,
+      "unit": "个",
+      "commonUses": ["角码固定", "配件固定"],
+      "note": "304 不锈钢优先，避免与铝发生电偶腐蚀。"
+    },
+    {
+      "id": "cap-end-4040",
+      "name": "4040 端盖",
+      "category": "外观件",
+      "fitsSlot": ["4040"],
+      "unitPrice": 1.5,
+      "unit": "个",
+      "commonUses": ["封闭型材端面"],
+      "note": "遮挡端面切口，提升外观并防止割手。每根外露型材两端各一个。"
+    },
+    {
+      "id": "foot-adjust-m8",
+      "name": "M8 可调脚杯",
+      "category": "支撑件",
+      "fitsSlot": ["4040", "4080", "4545"],
+      "unitPrice": 6,
+      "unit": "个",
+      "commonUses": ["落地调平"],
+      "note": "带橡胶底垫。螺纹 M8 旋入型材中心孔。调节量约 ±10mm，用于补偿地面不平。"
+    },
+    {
+      "id": "caster-m10-2in",
+      "name": "2 寸 M10 万向脚轮",
+      "category": "支撑件",
+      "fitsSlot": ["4040", "4080"],
+      "unitPrice": 22,
+      "unit": "个",
+      "commonUses": ["可移动框架"],
+      "note": "带刹车。单轮承重约 40kg。4 个一组时注意预留安装高度。"
+    },
+    {
+      "id": "panel-strip-pvc",
+      "name": "板材压条 PVC",
+      "category": "板材固定",
+      "fitsSlot": ["4040", "4080"],
+      "unitPrice": 4,
+      "unit": "米",
+      "commonUses": ["嵌装 5-10mm 板材"],
+      "note": "压入槽口后形成 U 型槽，板材可直接插入，无需打孔。是桌面固定的首选方式。"
+    }
+  ]
+}

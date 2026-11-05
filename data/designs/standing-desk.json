@@ -1,0 +1,262 @@
+{
+  "$schema": "./design.schema.json",
+  "id": "standing-desk",
+  "name": "升降桌 · 单柱双列",
+  "revision": 1,
+  "units": "mm",
+  "meta": {
+    "description": "1400 × 700 台面，双列单电机升降柱，4040 主框体。台面高度 720–1180 可调。",
+    "heightRange": [
+      720,
+      1180
+    ],
+    "frameHeight": 720,
+    "loadRating": 120,
+    "profileSeries": "4040",
+    "note": "几何按 720mm 落位状态建模。升降范围由升降柱行程决定，不改变本文件几何。"
+  },
+  "parts": [
+    {
+      "id": "desktop",
+      "kind": "plate",
+      "role": "台面",
+      "material": "枫桦木多层板",
+      "size": [
+        1400,
+        25,
+        700
+      ],
+      "position": [
+        0,
+        707.5,
+        0
+      ],
+      "note": "25mm 厚。下表面与框体上表面贴合。"
+    },
+    {
+      "id": "frame-rail-front",
+      "kind": "beam",
+      "profile": "4040",
+      "role": "长边框",
+      "material": "6063-T5 银白阳极氧化",
+      "size": [
+        1300,
+        40,
+        40
+      ],
+      "position": [
+        0,
+        675,
+        290
+      ],
+      "note": "框体前后主梁，全长 1300。"
+    },
+    {
+      "id": "frame-rail-back",
+      "kind": "beam",
+      "profile": "4040",
+      "role": "长边框",
+      "material": "6063-T5 银白阳极氧化",
+      "size": [
+        1300,
+        40,
+        40
+      ],
+      "position": [
+        0,
+        675,
+        -290
+      ],
+      "note": "框体前后主梁，全长 1300。"
+    },
+    {
+      "id": "frame-rail-left",
+      "kind": "beam",
+      "profile": "4040",
+      "role": "短边框",
+      "material": "6063-T5 银白阳极氧化",
+      "size": [
+        40,
+        40,
+        540
+      ],
+      "position": [
+        -630,
+        675,
+        0
+      ],
+      "note": "框体左右端梁，沿深度方向。夹于两根主梁之间，长度 540 = 620 − 2×40。"
+    },
+    {
+      "id": "frame-rail-right",
+      "kind": "beam",
+      "profile": "4040",
+      "role": "短边框",
+      "material": "6063-T5 银白阳极氧化",
+      "size": [
+        40,
+        40,
+        540
+      ],
+      "position": [
+        630,
+        675,
+        0
+      ],
+      "note": "框体左右端梁，沿深度方向。夹于两根主梁之间，长度 540 = 620 − 2×40。"
+    },
+    {
+      "id": "crossbar",
+      "kind": "beam",
+      "profile": "4040",
+      "role": "中横撑",
+      "material": "6063-T5 银白阳极氧化",
+      "size": [
+        920,
+        40,
+        40
+      ],
+      "position": [
+        0,
+        635,
+        0
+      ],
+      "note": "连接两根升降柱内侧面（间距 920），抑制左右晃动。上表面紧贴框体下表面 655。"
+    },
+    {
+      "id": "column-left-outer",
+      "kind": "column",
+      "role": "升降柱外管",
+      "material": "钢制喷粉 深灰",
+      "size": [
+        80,
+        300,
+        50
+      ],
+      "position": [
+        -500,
+        170,
+        0
+      ],
+      "note": "外管固定段，随桌架不动。下接脚杯，上接内管。",
+      "massKg": 3.8
+    },
+    {
+      "id": "column-left-inner",
+      "kind": "column",
+      "role": "升降柱内管",
+      "material": "钢制喷粉 深灰",
+      "size": [
+        68,
+        355,
+        38
+      ],
+      "position": [
+        -500,
+        477.5,
+        0
+      ],
+      "note": "内管伸缩段，上端接中横撑。图示为 720mm 落位状态。",
+      "massKg": 3.2
+    },
+    {
+      "id": "column-right-outer",
+      "kind": "column",
+      "role": "升降柱外管",
+      "material": "钢制喷粉 深灰",
+      "size": [
+        80,
+        300,
+        50
+      ],
+      "position": [
+        500,
+        170,
+        0
+      ],
+      "note": "同左侧。",
+      "massKg": 3.8
+    },
+    {
+      "id": "column-right-inner",
+      "kind": "column",
+      "role": "升降柱内管",
+      "material": "钢制喷粉 深灰",
+      "size": [
+        68,
+        355,
+        38
+      ],
+      "position": [
+        500,
+        477.5,
+        0
+      ],
+      "note": "同左侧。",
+      "massKg": 3.2
+    },
+    {
+      "id": "foot-left",
+      "kind": "box",
+      "role": "脚杯",
+      "material": "钢制喷粉 深灰",
+      "size": [
+        70,
+        20,
+        60
+      ],
+      "position": [
+        -500,
+        10,
+        0
+      ],
+      "note": "M8 可调脚杯，调节量 ±10mm，用于补偿地面不平。",
+      "massKg": 0.45
+    },
+    {
+      "id": "foot-right",
+      "kind": "box",
+      "role": "脚杯",
+      "material": "钢制喷粉 深灰",
+      "size": [
+        70,
+        20,
+        60
+      ],
+      "position": [
+        500,
+        10,
+        0
+      ],
+      "note": "M8 可调脚杯，调节量 ±10mm，用于补偿地面不平。",
+      "massKg": 0.45
+    }
+  ],
+  "accessories": [
+    {
+      "ref": "bracket-outer-4040",
+      "qty": 12,
+      "note": "框体四角各 2 个、中横撑两端各 2 个"
+    },
+    {
+      "ref": "tnut-m8",
+      "qty": 24,
+      "note": "与角码螺栓配对"
+    },
+    {
+      "ref": "bolt-m8x20",
+      "qty": 24,
+      "note": "304 不锈钢"
+    },
+    {
+      "ref": "spring-tnut-m8",
+      "qty": 8,
+      "note": "台面固定，槽内任意位置压入"
+    },
+    {
+      "ref": "cap-end-4040",
+      "qty": 4,
+      "note": "短边框外露端面"
+    }
+  ]
+}
