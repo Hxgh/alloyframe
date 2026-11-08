@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { CatalogSchema, AccessoryCatalogSchema, DesignSchema, validateReferences } from "@/lib/schema";
+import { getDataRoot } from "@/lib/project-store";
 import type { AccessoryCatalog, Catalog, Design } from "@/lib/schema";
 
 /**
@@ -8,9 +9,10 @@ import type { AccessoryCatalog, Catalog, Design } from "@/lib/schema";
  * 由人（编辑器）或 Agent（直接写文件）维护，git 提交即版本管理。
  *
  * 全部在服务端读取，客户端拿到的已是校验过的对象。
+ * ALLOYFRAME_DATA_DIR 可指定绝对数据目录，由 getDataRoot 统一解析。
  */
 
-const DATA_ROOT = path.join(process.cwd(), "data");
+const DATA_ROOT = getDataRoot();
 
 function readJson(file: string): unknown {
   const full = path.join(DATA_ROOT, file);

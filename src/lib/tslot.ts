@@ -1,5 +1,7 @@
 import * as THREE from "three";
-import type { Profile } from "./schema";
+import type { Part, Profile } from "./schema";
+import { beamDims, longAxis } from "./materials";
+import type { SceneBounds, Vec3 } from "./scene-fit";
 
 /**
  * 把一个矩形截面参数化成带四面 T 槽的 THREE.Shape（局部坐标，中心在原点）。
@@ -132,32 +134,38 @@ export function axisRotation(axis: "x" | "y" | "z"): [number, number, number] {
   return [0, 0, 0];
 }
 
-/** 相机自动取景需要知道整体包围盒，这里按零件列表算 */
+/** 与 PartMesh 共用同一套 Euler 变换，避免取景与实际几何轴向不一致。 */
+export function partRotation(part: Pick<Part, "kind" | "size" | "rotation">): Vec3 {
+  const extra = part.rotation.map(THREE.MathUtils.degToRad) as Vec3;
+  const base = part.kind === "beam" ? axisRotation(longAxis(part)) : [0, 0, 0];
+  return extra.map((value, i) => value + base[i]) as Vec3;
+}
+
+/** 用旋转后的包围盒求界；位移可复用拆解数据，不改变零件或几何。 */
 export function designBounds(
-  parts: Array<{ size: [number, number, number]; position: [number, number, number] }>,
-): { center: [number, number, number]; radius: number } {
-  let minX = Infinity,
-    minY = Infinity,
-    minZ = Infinity;
-  let maxX = -Infinity,
-    maxY = -Infinity,
-    maxZ = -Infinity;
-
-  for (const p of parts) {
-    const [sx, sy, sz] = p.size;
-    const [px, py, pz] = p.position;
-    minX = Math.min(minX, px - sx / 2);
-    maxX = Math.max(maxX, px + sx / 2);
-    minY = Math.min(minY, py - sy / 2);
-    maxY = Math.max(maxY, py + sy / 2);
-    minZ = Math.min(minZ, pz - sz / 2);
-    maxZ = Math.max(maxZ, pz + sz / 2);
+  parts: Array<{ id?: string; kind?: Part["kind"]; size: Vec3; position: Vec3; rotation?: Vec3 }>,
+  offsets?: ReadonlyMap<string, Vec3>,
+): SceneBounds {
+  if (parts.length === 0) {
+    return { min: [0, 0, 0], max: [0, 0, 0], center: [0, 0, 0], radius: 200 };
   }
-
-  const center: [number, number, number] = [(minX + maxX) / 2, (minY + maxY) / 2, (minZ + maxZ) / 2];
-  const radius = Math.max(
-    Math.hypot(maxX - minX, maxY - minY, maxZ - minZ) / 2,
-    200,
-  );
-  return { center, radius };
+  const bounds = new THREE.Box3();
+  for (const part of parts) {
+    const model = { ...part, kind: part.kind ?? "box", rotation: part.rotation ?? [0, 0, 0] as Vec3 };
+    const rotation = new THREE.Euler(...partRotation(model));
+    const matrix = new THREE.Matrix4().makeRotationFromEuler(rotation);
+    const offset = part.id ? offsets?.get(part.id) : undefined;
+    matrix.setPosition(...part.position.map((value, i) => value + (offset?.[i] ?? 0)) as Vec3);
+    const { sectionW, sectionH, length } = beamDims(model);
+    const localSize = model.kind === "beam" ? [sectionW, sectionH, length] as Vec3 : part.size;
+    const half = new THREE.Vector3(...localSize).multiplyScalar(0.5);
+    bounds.union(new THREE.Box3(half.clone().negate(), half).applyMatrix4(matrix));
+  }
+  const center = bounds.getCenter(new THREE.Vector3());
+  return {
+    min: bounds.min.toArray() as Vec3,
+    max: bounds.max.toArray() as Vec3,
+    center: center.toArray() as Vec3,
+    radius: Math.max(bounds.getSize(new THREE.Vector3()).length() / 2, 200),
+  };
 }

@@ -16,7 +16,7 @@ export type ExplodeVector = [number, number, number];
  */
 export function explodeOffsets(parts: Part[], amount: number): Map<string, ExplodeVector> {
   const result = new Map<string, ExplodeVector>();
-  if (amount <= 0) {
+  if (parts.length === 0 || amount <= 0) {
     for (const p of parts) result.set(p.id, [0, 0, 0]);
     return result;
   }

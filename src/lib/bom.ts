@@ -153,8 +153,8 @@ export function cutListCsv(bom: BomResult): string {
     r.label,
     String(r.lengthMm ?? ""),
     String(r.qty),
+    (r.massKg / r.qty).toFixed(3),
     r.massKg.toFixed(3),
-    (r.massKg * r.qty).toFixed(3),
     (r.note ?? "").replace(/[",\n]/g, " "),
   ]);
 
@@ -170,8 +170,8 @@ export function bomCsv(bom: BomResult): string {
     l.spec,
     String(l.qty),
     l.unit,
+    (l.massKg / l.qty).toFixed(3),
     l.massKg.toFixed(3),
-    (l.massKg * l.qty).toFixed(3),
     l.unitPrice != null ? l.unitPrice.toFixed(2) : "",
     l.lineTotal != null ? l.lineTotal.toFixed(2) : "",
     (l.note ?? "").replace(/[",\n]/g, " "),

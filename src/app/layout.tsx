@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { Providers } from "@/components/Providers";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -15,8 +15,15 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "榫卯 · 铝型材构建",
+  title: "铝构 · AlloyFrame · 铝型材 3D 构建",
   description: "铝型材结构的参数化 3D 预演与算料。",
+  applicationName: "铝构 · AlloyFrame",
+};
+
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {

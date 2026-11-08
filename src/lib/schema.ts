@@ -7,6 +7,11 @@ import { z } from "zod";
 
 const vec3 = z.tuple([z.number(), z.number(), z.number()]);
 
+/** 设计与零件 id 同时用于文件名和链接，不允许路径片段。 */
+export const IdSchema = z.string().max(120).regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, {
+  message: "id 只能包含小写字母、数字及单个短横线分隔符",
+});
+
 /** 型材截面与槽口参数 */
 export const ProfileSchema = z.object({
   id: z.string(),
@@ -65,8 +70,8 @@ export const AccessoryCatalogSchema = z.object({
  */
 export const PartKindSchema = z.enum(["beam", "plate", "column", "box"]);
 
-export const PartSchema = z.object({
-  id: z.string().min(1),
+export const PartSchema = z.strictObject({
+  id: IdSchema,
   kind: PartKindSchema,
   role: z.string().min(1),
   /** 引用 profiles.json 的 id。仅 kind=beam 时生效 */
@@ -90,13 +95,13 @@ export const PartSchema = z.object({
   note: z.string().optional(),
 });
 
-export const DesignAccessorySchema = z.object({
+export const DesignAccessorySchema = z.strictObject({
   ref: z.string().min(1),
   qty: z.number().int().positive(),
   note: z.string().optional(),
 });
 
-export const DesignMetaSchema = z.object({
+export const DesignMetaSchema = z.strictObject({
   description: z.string().default(""),
   /** 台面高度范围 [最低, 最高]，单位 mm */
   heightRange: z.tuple([z.number(), z.number()]).optional(),
@@ -107,13 +112,15 @@ export const DesignMetaSchema = z.object({
   note: z.string().optional(),
 });
 
-export const DesignSchema = z.object({
-  id: z.string().min(1),
-  name: z.string().min(1),
+export const DesignSchema = z.strictObject({
+  /** 编辑器 schema 标注是已知字段，不参与运行时校验或网络读取。 */
+  $schema: z.string().optional(),
+  id: IdSchema,
+  name: z.string().trim().min(1),
   revision: z.number().int().nonnegative().default(0),
   units: z.literal("mm"),
   meta: DesignMetaSchema.default({ description: "" }),
-  parts: z.array(PartSchema).min(1),
+  parts: z.array(PartSchema),
   accessories: z.array(DesignAccessorySchema).default([]),
 });
 

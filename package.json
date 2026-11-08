@@ -1,5 +1,5 @@
 {
-  "name": "sunmao",
+  "name": "alloyframe",
   "version": "0.1.0",
   "private": true,
   "scripts": {
@@ -7,6 +7,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
+    "typecheck": "tsc --noEmit --incremental false",
+    "test": "tsx --test src/lib/*.test.ts",
     "validate": "tsx src/scripts/validate.ts"
   },
   "dependencies": {

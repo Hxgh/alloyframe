@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="铝构 · AlloyFrame">
+  <rect width="64" height="64" rx="14" fill="#0f172a"/>
+  <g fill="#e2e8f0">
+    <path d="M10 10h20v8H18v12h-8z"/>
+    <path d="M54 10v20h-8V18H34v-8z"/>
+    <path d="M54 54H34v-8h12V34h8z"/>
+    <path d="M10 54V34h8v12h12v8z"/>
+  </g>
+</svg>
