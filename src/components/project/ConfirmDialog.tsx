@@ -36,7 +36,7 @@ export function ConfirmDialog({
       <DialogContent initialFocus={cancelRef}>
         <DialogTitle>{title}</DialogTitle>
         <DialogDescription>{description}</DialogDescription>
-        <div className="flex flex-wrap justify-end gap-2">
+        <div className="grid min-w-0 grid-cols-1 gap-2 border-t border-border pt-3 sm:flex sm:flex-wrap sm:justify-end">
           <DialogClose
             render={<Button ref={cancelRef} type="button" size="touch" variant="outline" />}
           >

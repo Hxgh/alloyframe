@@ -15,11 +15,11 @@ type Props = {
 export function Header({ design, onBack }: Props) {
   return (
     <header className="app-header flex min-h-14 min-w-0 shrink-0 items-center gap-2 border-b border-border px-3 py-1.5 sm:gap-3 sm:px-4">
-      <Link href="/" prefetch={false} onClick={onBack} aria-label="返回项目库" title="返回项目库" className="grid size-11 shrink-0 place-items-center rounded-lg hover:bg-muted focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50">
+      <Link href="/" prefetch={false} onClick={onBack} aria-label="返回项目库" title="返回项目库" className="grid size-[var(--control-icon-size)] shrink-0 place-items-center rounded-lg hover:bg-muted focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50">
         <ArrowLeft className="size-4" />
       </Link>
       <div className="min-w-0 flex-1">
-        <h1 className="truncate text-sm font-medium" title={design.name}>{design.name}</h1>
+        <h1 className="truncate text-sm font-semibold" title={design.name}>{design.name}</h1>
         <p className="truncate text-xs text-muted-foreground">铝构 · AlloyFrame<span className="hidden sm:inline"> · 项目工作台</span><span className="hidden sm:inline"> · rev.{design.revision}</span></p>
       </div>
       <Separator orientation="vertical" className="my-1" />

@@ -1,11 +1,11 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import designJson from "../../data/designs/standing-desk.json";
-import profilesJson from "../../data/catalog/profiles.json";
-import accessoriesJson from "../../data/catalog/accessories.json";
-import { AccessoryCatalogSchema, CatalogSchema, DesignSchema } from "./schema";
-import { enumerateMaterials, materialLook, partMassKg } from "./materials";
-import { buildBom } from "./bom";
+import designJson from "../../../data/designs/standing-desk.json";
+import profilesJson from "../../../data/catalog/profiles.json";
+import accessoriesJson from "../../../data/catalog/accessories.json";
+import { AccessoryCatalogSchema, CatalogSchema, DesignSchema } from "../schema";
+import { enumerateMaterials, materialLook, partMassKg } from "../materials";
+import { buildBom } from "../bom";
 
 const design = DesignSchema.parse(designJson);
 const catalog = CatalogSchema.parse(profilesJson);

@@ -8,15 +8,15 @@ import type { ProjectRecord, ValidationIssue } from "@/lib/projects";
 import { inspectDesign } from "@/lib/validation";
 import { ProjectRequestError, downloadJson, projectRequest } from "@/lib/project-client";
 import {
-  designText, draftKey, isDraftDirty, legacyDraftKey, parseDraftBackup, serializeDraftBackup, unappliedFieldsWarning,
-  type DraftBackup, type PendingProjectForm,
+  captureProjectExport, createDraftSessionId, designText, isDraftDirty, serializeDraftBackup, unappliedFieldsWarning,
+  type PendingProjectForm,
 } from "@/lib/project-draft";
 import {
   acknowledgeProjectSave, autoSaveKey, beginProjectSave, canSaveProject, captureProjectSave,
-  createProjectSaveTimer, isRemoteCheckCurrent, legacyAutoSaveKey, parseAutoSavePreference, pauseProjectSave,
+  createProjectSaveTimer, isRemoteCheckCurrent, legacyAutoSaveKey, parseAutoSavePreference, pauseProjectSave, projectChangeKey,
   type SaveConditions, type SaveSnapshot,
 } from "@/lib/project-save";
-import { readProjectStorage, writeProjectStorage } from "@/lib/project-storage";
+import { migrateProjectDraft, readProjectDrafts, readProjectStorage, writeProjectDraft, writeProjectStorage, type StoredDraftBackup } from "@/lib/project-storage";
 import { Button } from "@/components/ui/button";
 import { Workspace } from "@/components/Workspace";
 import { ConfirmDialog } from "./ConfirmDialog";
@@ -40,7 +40,7 @@ type EditorState = {
   notice: string;
   remote: ProjectRecord | null;
   conflict: boolean;
-  backup: DraftBackup | null;
+  backups: StoredDraftBackup[];
   backupReady: boolean;
   autoSave: boolean;
   preferenceReady: boolean;
@@ -55,7 +55,7 @@ function saveConditions(state: EditorState, valid: boolean, active: boolean, lea
   return {
     valid, dirty: isDraftDirty(state.text, state.saved), pending: Object.values(state.pendingForms).some(Boolean),
     writable: state.writable, busy: state.busy, saving: state.saving, backupReady: state.backupReady,
-    backup: state.backup !== null, remote: state.remote !== null, conflict: state.conflict,
+    backup: state.backups.length > 0, remote: state.remote !== null, conflict: state.conflict,
     confirmation: state.confirmation !== null, active: active && state.activeReady, leaving,
     preferenceReady: state.preferenceReady, autoSave: state.autoSave, failed: state.saveFailed || Boolean(state.checkError),
   };
@@ -63,11 +63,12 @@ function saveConditions(state: EditorState, valid: boolean, active: boolean, lea
 
 export function ProjectEditor({ initial, catalog, accessories, writable: initialWritable }: Props) {
   const router = useRouter();
+  const [sessionId] = useState(createDraftSessionId);
   const [state, setState] = useState<EditorState>(() => ({
     saved: initial, text: designText(initial.design), preview: initial.design,
     writable: false, permissionReady: false, busy: false, saving: false,
     error: "", saveError: "", saveFailed: false, checkError: "", storageError: "", preferenceError: "", notice: "",
-    remote: null, conflict: false, backup: null, backupReady: false, autoSave: true, preferenceReady: false, activeReady: false,
+    remote: null, conflict: false, backups: [], backupReady: false, autoSave: true, preferenceReady: false, activeReady: false,
     confirmation: null, pendingForms: { part: false, metadata: false, accessories: false }, formEpoch: 0, workspaceEpoch: 0,
   }));
   // 事件和异步回执始终读最新文本、表单及保存基准，不使用发请求时的闭包。
@@ -79,7 +80,10 @@ export function ProjectEditor({ initial, catalog, accessories, writable: initial
   const checkSequence = useRef(0);
   const permissionDenied = useRef(false);
   const active = useRef(false);
+  const activityEpoch = useRef(0);
+  const visible = useRef(false);
   const activeReady = useRef(false);
+  const recheckPending = useRef(false);
   const leaving = useRef(false);
   const backupLoaded = useRef(false);
   const backupTimer = useRef<number | null>(null);
@@ -97,9 +101,10 @@ export function ProjectEditor({ initial, catalog, accessories, writable: initial
   }, []);
   const {
     saved, text, preview, writable, permissionReady, busy, saving, error, saveError, saveFailed,
-    checkError, storageError, preferenceError, notice, remote, conflict, backup, backupReady,
+    checkError, storageError, preferenceError, notice, remote, conflict, backups, backupReady,
     autoSave, preferenceReady, confirmation, pendingForms, formEpoch, workspaceEpoch,
   } = state;
+  const backup = backups[0] ?? null;
   const dirty = isDraftDirty(text, saved);
   const pending = Object.values(pendingForms).some(Boolean);
 
@@ -128,10 +133,10 @@ export function ProjectEditor({ initial, catalog, accessories, writable: initial
   const flushBackup = useCallback((leavingPage = false) => {
     cancelBackupTimer();
     const live = current.current;
-    if (live.backup) return true; // 未决恢复备份不能被当前文件覆盖。
-    const value = serializeDraftBackup(live.text, live.saved, draftFingerprint.current);
+    if (live.backups.length || leaving.current) return true; // 未决恢复备份和离开前的备份不能被当前文件覆盖。
+    const value = serializeDraftBackup(live.text, live.saved, draftFingerprint.current, sessionId);
     try {
-      writeProjectStorage(localStorage, draftKey(live.saved.design.id), legacyDraftKey(live.saved.design.id), value);
+      writeProjectDraft(localStorage, live.saved.design.id, sessionId, value);
       update({ storageError: "" });
       return true;
     } catch {
@@ -141,14 +146,16 @@ export function ProjectEditor({ initial, catalog, accessories, writable: initial
       update({ storageError: `${reason}${leavingPage ? "已阻止当前操作和自动跳转，页面内容仍保留。" : ""}未应用表单输入不在 JSON 备份中。` });
       return false;
     }
-  }, [cancelBackupTimer, update]);
+  }, [cancelBackupTimer, sessionId, update]);
 
   const checkRemote = useCallback(async () => {
-    if (!active.current || !activeReady.current || leaving.current || inFlightRef.current || current.current.busy) return;
+    if (!active.current || !visible.current || leaving.current || !current.current.backupReady) return;
+    if (inFlightRef.current || current.current.busy) { recheckPending.current = true; return; }
+    recheckPending.current = false;
     const check = { sequence: ++checkSequence.current, epoch: baselineEpoch.current, fingerprint: current.current.saved.fingerprint };
     const stillCurrent = () => isRemoteCheckCurrent(check, {
       sequence: checkSequence.current, epoch: baselineEpoch.current, fingerprint: current.current.saved.fingerprint,
-      active: active.current && activeReady.current, saving: Boolean(inFlightRef.current), leaving: leaving.current,
+      active: active.current && visible.current, saving: Boolean(inFlightRef.current), leaving: leaving.current,
     });
     try {
       const result = await projectRequest<{ project: ProjectRecord; writable: boolean }>(`/api/projects/${initial.design.id}`);
@@ -156,8 +163,9 @@ export function ProjectEditor({ initial, catalog, accessories, writable: initial
       const changed = result.project.fingerprint !== current.current.saved.fingerprint;
       const locked = changed || current.current.conflict;
       if (locked || !result.writable) saveTimer.cancel();
+      activeReady.current = true;
       update({
-        writable: initialWritable && result.writable && !permissionDenied.current, permissionReady: true, checkError: "",
+        writable: initialWritable && result.writable && !permissionDenied.current, permissionReady: true, checkError: "", activeReady: true,
         ...(locked ? { remote: result.project, conflict: true } : {}),
       });
     } catch (cause) {
@@ -170,10 +178,14 @@ export function ProjectEditor({ initial, catalog, accessories, writable: initial
 
   useLayoutEffect(() => {
     active.current = true;
+    const epoch = ++activityEpoch.current;
+    visible.current = document.visibilityState !== "hidden";
     activeReady.current = false;
     return () => {
       // Activity 隐藏和真实卸载均取消调度；已发出的请求仍可确认保存基准。
       active.current = false;
+      activityEpoch.current = epoch + 1;
+      visible.current = false;
       activeReady.current = false;
       invalidateRemoteChecks();
       saveTimer.cancel();
@@ -200,29 +212,60 @@ export function ProjectEditor({ initial, catalog, accessories, writable: initial
       if (!backupLoaded.current || returning) {
         try {
           const live = current.current;
-          const value = parseDraftBackup(readProjectStorage(localStorage, draftKey(initial.design.id), legacyDraftKey(initial.design.id)), initial.design.id);
-          if (value && (value.fingerprint !== live.saved.fingerprint || isDraftDirty(value.text, live.saved))) update({ backup: value });
-          else {
-            writeProjectStorage(localStorage, draftKey(initial.design.id), legacyDraftKey(initial.design.id), null);
-            update({ backup: null });
-          }
+          const values = readProjectDrafts(localStorage, initial.design.id, sessionId);
+          update({ backups: values.filter((value) => value.fingerprint !== live.saved.fingerprint || isDraftDirty(value.text, live.saved)) });
         } catch {
           update({ storageError: "浏览器草稿备份不可用。请及时保存或导出 JSON，避免关闭页面后丢失修改。" });
         }
         backupLoaded.current = true;
       }
-      activeReady.current = true;
-      update({ backupReady: true, preferenceReady: true, activeReady: true });
+      update({ backupReady: true, preferenceReady: true });
+      void checkRemote();
     }, 0);
     return () => window.clearTimeout(timer);
-  }, [initial.design.id, update]);
+  }, [initial.design.id, sessionId, checkRemote, update]);
 
   useEffect(() => {
-    const timer = window.setTimeout(() => { void checkRemote(); }, 0);
-    const onFocus = () => { void checkRemote(); };
+    const pause = () => {
+      activeReady.current = false;
+      invalidateRemoteChecks();
+      saveTimer.cancel();
+      update({ activeReady: false });
+    };
+    const onFocus = () => { pause(); void checkRemote(); };
+    const onVisibility = () => {
+      visible.current = document.visibilityState !== "hidden";
+      pause();
+      if (visible.current) void checkRemote();
+      else if (current.current.backupReady) flushBackup();
+    };
+    const onStorage = (event: StorageEvent) => {
+      if (event.key !== projectChangeKey(initial.design.id) && event.key !== null) return;
+      pause();
+      void checkRemote();
+    };
+    const onPageHide = () => {
+      visible.current = false;
+      pause();
+      if (current.current.backupReady) flushBackup();
+    };
     window.addEventListener("focus", onFocus);
-    return () => { window.clearTimeout(timer); window.removeEventListener("focus", onFocus); };
-  }, [checkRemote]);
+    window.addEventListener("storage", onStorage);
+    window.addEventListener("pagehide", onPageHide);
+    window.addEventListener("pageshow", onVisibility);
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => {
+      window.removeEventListener("focus", onFocus);
+      window.removeEventListener("storage", onStorage);
+      window.removeEventListener("pagehide", onPageHide);
+      window.removeEventListener("pageshow", onVisibility);
+      document.removeEventListener("visibilitychange", onVisibility);
+    };
+  }, [checkRemote, flushBackup, initial.design.id, invalidateRemoteChecks, saveTimer, update]);
+
+  useEffect(() => {
+    if (!busy && recheckPending.current) void checkRemote();
+  }, [busy, checkRemote]);
 
   useEffect(() => {
     cancelBackupTimer();
@@ -233,19 +276,6 @@ export function ProjectEditor({ initial, catalog, accessories, writable: initial
     }, 300);
     return cancelBackupTimer;
   }, [backupReady, backup, text, saved.fingerprint, cancelBackupTimer, flushBackup]);
-
-  useEffect(() => {
-    const beforeUnload = (event: BeforeUnloadEvent) => {
-      const live = current.current;
-      const backedUp = live.backupReady && flushBackup(true);
-      if (isDraftDirty(live.text, live.saved) || Object.values(live.pendingForms).some(Boolean) || inFlightRef.current || !backedUp) {
-        event.preventDefault();
-        event.returnValue = "";
-      }
-    };
-    window.addEventListener("beforeunload", beforeUnload);
-    return () => window.removeEventListener("beforeunload", beforeUnload);
-  }, [flushBackup]);
 
   const save = useCallback((automatic = false) => saveTimer.save(async () => {
     const live = current.current;
@@ -275,6 +305,11 @@ export function ProjectEditor({ initial, catalog, accessories, writable: initial
       });
       // B（包括无效原文）只换到 P1 基准，不 adopt、不重置表单、不删除新草稿。
       flushBackup();
+      try {
+        localStorage.setItem(projectChangeKey(project.design.id), JSON.stringify({ sessionId, fingerprint: project.fingerprint }));
+      } catch {
+        update({ storageError: "项目已保存，但未能通知其他标签页检查文件。其他页面恢复显示时会重新核对指纹；请及时检查浏览器存储。" });
+      }
     } catch (cause) {
       const status = cause instanceof ProjectRequestError ? cause.status : undefined;
       if (status === 403) permissionDenied.current = true;
@@ -289,8 +324,24 @@ export function ProjectEditor({ initial, catalog, accessories, writable: initial
       update({ saving: false });
     }
     // 409 的锁在 GET 之前已建立；读取失败也不会恢复自动保存。
-    if (refreshConflict) await checkRemote();
-  }), [analyzeText, saveTimer, update, flushBackup, checkRemote]);
+    if (refreshConflict || recheckPending.current) await checkRemote();
+  }), [analyzeText, saveTimer, sessionId, update, flushBackup, checkRemote]);
+
+  useEffect(() => {
+    const beforeUnload = (event: BeforeUnloadEvent) => {
+      saveTimer.cancel();
+      const live = current.current;
+      const backedUp = live.backupReady && flushBackup(true);
+      if (isDraftDirty(live.text, live.saved) || Object.values(live.pendingForms).some(Boolean) || inFlightRef.current || !backedUp) {
+        event.preventDefault();
+        event.returnValue = "";
+        // 取消原生离页时恢复计时；真实离页由 pagehide / Activity 清理取消。
+        saveTimer.schedule(() => { void save(true); });
+      }
+    };
+    window.addEventListener("beforeunload", beforeUnload);
+    return () => window.removeEventListener("beforeunload", beforeUnload);
+  }, [flushBackup, saveTimer, save]);
 
   const canSave = canSaveProject(saveConditions(state, Boolean(analysis.design), true, false));
   const automaticAllowed = canSaveProject(saveConditions(state, Boolean(analysis.design), true, false), true);
@@ -315,11 +366,11 @@ export function ProjectEditor({ initial, catalog, accessories, writable: initial
   function navigationBlocked() {
     const live = current.current;
     return live.busy || live.saving || Boolean(inFlightRef.current) || !live.backupReady
-      || !active.current || !activeReady.current || leaving.current;
+      || !active.current || !visible.current || leaving.current;
   }
 
   function filesBlocked() {
-    return navigationBlocked() || current.current.backup !== null;
+    return navigationBlocked() || current.current.backups.length > 0;
   }
 
   function resetToFile() {
@@ -334,10 +385,10 @@ export function ProjectEditor({ initial, catalog, accessories, writable: initial
   function prepareToLeave() {
     saveTimer.cancel();
     const live = current.current;
-    const value = live.backup ?? parseDraftBackup(serializeDraftBackup(live.text, live.saved, draftFingerprint.current), live.saved.design.id);
     leaving.current = true;
+    invalidateRemoteChecks();
     resetToFile();
-    update({ backup: value, workspaceEpoch: live.workspaceEpoch + 1, busy: true });
+    update({ workspaceEpoch: live.workspaceEpoch + 1, busy: true });
   }
 
   function leave() {
@@ -368,7 +419,7 @@ export function ProjectEditor({ initial, catalog, accessories, writable: initial
 
   function changeJson(value: string) {
     const live = current.current;
-    if (!live.writable || live.busy || !live.backupReady || live.backup) return;
+    if (!live.writable || live.busy || !live.backupReady || live.backups.length) return;
     if (Object.values(live.pendingForms).some(Boolean)) { update({ error: unappliedFieldsWarning }); return; }
     changeText(value);
     resetForms();
@@ -376,7 +427,7 @@ export function ProjectEditor({ initial, catalog, accessories, writable: initial
 
   function changeDesign(design: Design) {
     const live = current.current;
-    if (!live.writable || live.busy || !live.backupReady || live.backup) return;
+    if (!live.writable || live.busy || !live.backupReady || live.backups.length) return;
     changeText(designText({ ...design, id: live.saved.design.id, revision: live.saved.design.revision }));
   }
 
@@ -392,14 +443,15 @@ export function ProjectEditor({ initial, catalog, accessories, writable: initial
     update({
       saved: project, text: designText(project.design), preview: project.design,
       remote: keepConflict ? current.current.remote : null, conflict: keepConflict && current.current.conflict,
-      error: "", saveError: "", saveFailed: false, checkError: "", backup: null, notice: "",
+      error: "", saveError: "", saveFailed: false, checkError: "", backups: [], notice: "",
     });
     try {
-      writeProjectStorage(localStorage, draftKey(project.design.id), legacyDraftKey(project.design.id), null);
+      writeProjectDraft(localStorage, project.design.id, sessionId, null);
       update({ storageError: "" });
     } catch {
       update({ storageError: "文件版本已采用，但浏览器旧 JSON 备份未能清除；下次打开可能仍提示旧备份。正式文件未受影响。" });
     }
+    void checkRemote();
   }
 
   async function copy() {
@@ -429,12 +481,15 @@ export function ProjectEditor({ initial, catalog, accessories, writable: initial
     if (isDraftDirty(live.text, live.saved) || live.remote || live.conflict) { update({ error: "请先保存或解决草稿冲突，再归档项目。" }); return; }
     if (!flushBackup(true)) return;
     saveTimer.cancel();
+    const epoch = activityEpoch.current;
     update({ busy: true, error: "" });
     try {
       await projectRequest(`/api/projects/${live.saved.design.id}`, { method: "PATCH", body: JSON.stringify({ action: "archive", fingerprint: live.saved.fingerprint }) });
       cancelBackupTimer();
-      prepareToLeave();
-      router.push("/");
+      if (active.current && epoch === activityEpoch.current) {
+        prepareToLeave();
+        router.push("/");
+      } else update({ busy: false, notice: "项目已归档，可从项目库恢复。" });
     } catch (cause) {
       if (cause instanceof ProjectRequestError && cause.status === 403) { permissionDenied.current = true; update({ writable: false }); }
       if (cause instanceof ProjectRequestError && cause.status === 409) update({ conflict: true });
@@ -448,7 +503,9 @@ export function ProjectEditor({ initial, catalog, accessories, writable: initial
     if (filesBlocked()) return;
     const result = analyzeText(live.text);
     if (!result.design) { update({ error: "当前 JSON 无效，请先修复后导出项目。原文仍保留，可在 JSON 数据区域复制。" }); return; }
-    downloadJson(`${live.saved.design.id}${isDraftDirty(live.text, live.saved) ? "-draft" : ""}.json`, { ...result.design, revision: live.saved.design.revision });
+    const exported = captureProjectExport(result.design, live.saved);
+    downloadJson(exported.filename, exported.design);
+    update({ notice: exported.draft ? "已导出当前有效 JSON 草稿；仅下载副本，未写入正式文件。" : "已导出上次成功保存的设计；仅下载副本，未写入正式文件。" });
   }
 
   function askConfirmation(value: Exclude<Confirmation, null>) {
@@ -465,17 +522,24 @@ export function ProjectEditor({ initial, catalog, accessories, writable: initial
     else leave();
   }
 
-  function restoreBackup() {
+  function restoreBackup(source: StoredDraftBackup) {
     const live = current.current;
-    if (!live.backup || Object.values(live.pendingForms).some(Boolean) || live.busy || inFlightRef.current) return;
+    if (!live.backups.includes(source) || Object.values(live.pendingForms).some(Boolean) || live.busy || inFlightRef.current) return;
     saveTimer.cancel();
     cancelBackupTimer();
+    const value = serializeDraftBackup(source.text, live.saved, source.fingerprint, sessionId);
+    try {
+      if (value !== null) migrateProjectDraft(localStorage, live.saved.design.id, sessionId, value, source);
+    } catch {
+      update({ storageError: "草稿未能复制到当前编辑会话，原备份与输入仍保留。请检查浏览器存储后重试。" });
+      return;
+    }
     resetForms();
-    const changed = live.backup.fingerprint !== live.saved.fingerprint;
-    draftFingerprint.current = live.backup.fingerprint;
-    changeText(live.backup.text);
+    const changed = source.fingerprint !== live.saved.fingerprint;
+    draftFingerprint.current = source.fingerprint;
+    changeText(source.text);
     update({
-      backup: null, conflict: live.conflict || changed, ...(changed ? { remote: live.remote ?? live.saved } : {}),
+      backups: [], storageError: "", conflict: live.conflict || changed, ...(changed ? { remote: live.remote ?? live.saved } : {}),
       notice: changed || live.conflict ? "JSON 草稿已恢复，但保存基准与正式文件冲突；自动保存已暂停，请载入文件版本或另存副本。"
         : live.saveFailed || live.checkError ? "JSON 草稿已恢复；此前失败的暂停仍保留，请检查文件更新或手动重试保存。"
           : live.autoSave ? "JSON 草稿已恢复；写入权限允许时，有效且已应用的内容将在停止编辑 1.5 秒后自动保存。自动保存不是历史回滚。"
@@ -489,11 +553,11 @@ export function ProjectEditor({ initial, catalog, accessories, writable: initial
     saveTimer.cancel();
     cancelBackupTimer();
     try {
-      writeProjectStorage(localStorage, draftKey(live.saved.design.id), legacyDraftKey(live.saved.design.id), null);
+      writeProjectDraft(localStorage, live.saved.design.id, sessionId, null);
       resetToFile();
-      update({ storageError: "", backup: null });
+      update({ storageError: "", backups: [], notice: "本页未采用备份；其他编辑会话及旧版共享备份仍保留。" });
     } catch {
-      update({ storageError: "浏览器草稿备份未能删除，备份仍保留。请检查浏览器存储后重试。" });
+      update({ storageError: "当前编辑会话的草稿备份未能删除，备份仍保留。请检查浏览器存储后重试。" });
     }
   }
 
@@ -508,7 +572,7 @@ export function ProjectEditor({ initial, catalog, accessories, writable: initial
             : `已保存${savedAt ? ` · ${savedAt}` : ""}${saved.design.parts.length === 0 ? " · 待添加零件" : ""}${!autoSave ? " · 自动保存关闭" : ""}`;
   const messages = (
     <>
-      {backup && <div className="project-message border-b bg-muted px-3 py-3 text-sm" role="status"><p>发现此浏览器的未保存 JSON 草稿。备份不含尚未应用的表单输入。{backup.fingerprint !== saved.fingerprint ? "正式文件基准已变化，恢复后会暂停自动保存，需另存副本或解决冲突。" : autoSave ? "恢复后，有效且已应用的草稿将停顿 1.5 秒后自动写入正式文件；需要先查看时可关闭自动保存。" : "恢复后不会自动写入文件，需手动保存。"}自动保存不是历史回滚。</p><div className="mt-2 flex flex-wrap gap-2"><Button size="touch" variant="outline" disabled={pending || busy || saving} onClick={restoreBackup}>恢复草稿</Button><Button size="touch" variant="ghost" disabled={pending || busy || saving} onClick={discardBackup}>丢弃备份</Button></div></div>}
+      {backup && <div className="project-message border-b bg-muted px-3 py-3 text-sm" role="status"><p>发现此浏览器的未保存 JSON 草稿，已按编辑会话隔离。备份不含尚未应用的表单输入。恢复只复制到本页，不删除其他会话的草稿。{autoSave ? "同指纹的有效草稿恢复后将停顿 1.5 秒后自动写入正式文件；需要先查看时可关闭自动保存。" : "恢复后不会自动写入文件，需手动保存。"}不同指纹须先解决冲突；自动保存不是历史回滚。</p><ul className="mt-2 space-y-2">{backups.map((value) => <li key={value.key} className="flex flex-wrap items-center gap-2"><span className="min-w-0 flex-1 break-all text-xs">{value.sessionId === sessionId ? "当前编辑会话" : value.sessionId ? `其他编辑会话 · ${value.sessionId}` : "旧版共享草稿"}{value.fingerprint !== saved.fingerprint ? " · 文件基准已变化" : " · 同一文件基准"}</span><Button size="touch" variant="outline" disabled={pending || busy || saving} onClick={() => restoreBackup(value)}>恢复草稿</Button></li>)}</ul><Button className="mt-2" size="touch" variant="ghost" disabled={pending || busy || saving} onClick={discardBackup}>{backups.some((value) => value.sessionId === sessionId) ? "丢弃本会话备份并继续" : "不恢复，使用文件版本"}</Button></div>}
       {pending && <div className="project-message border-b bg-muted/50 px-3 py-2 text-xs leading-relaxed" role="status">{unappliedFieldsWarning}手动与自动保存、导出、另存副本、归档与高级 JSON 编辑已暂停；切换面板或确认此前的保存不会丢弃输入。</div>}
       {(error || saveError || checkError || storageError || preferenceError || notice) && <div className="project-message border-b px-3 py-2 text-xs leading-relaxed" role={error || saveError || checkError || storageError || preferenceError ? "alert" : "status"}>{error && <p className="text-destructive wrap-anywhere">{error}</p>}{saveError && <p className="text-destructive wrap-anywhere">{saveError}自动保存已暂停，草稿保留；无冲突时可手动重试，也可导出或另存有效 JSON。</p>}{checkError && <p className="text-destructive wrap-anywhere">{checkError}文件检查未完成，自动保存暂停；请重新检查文件更新。</p>}{storageError && <p className="text-destructive">{storageError}</p>}{preferenceError && <p className="text-destructive">{preferenceError}</p>}{notice && <p>{notice}</p>}</div>}
       {(remote || conflict) && <div className="project-message flex flex-wrap items-center gap-2 border-b bg-muted/50 px-3 py-2 text-xs"><p className="min-w-0 flex-1 leading-relaxed">文件发生冲突，自动保存已暂停，不会覆盖当前草稿。{remote ? "请载入文件版本或另存副本。" : "新文件版本尚未读取成功，请检查文件更新或另存副本。"}</p><Button size="touch" variant="outline" disabled={saveBlocked || !remote} onClick={() => askConfirmation("reload")}>载入文件版本</Button><Button size="touch" variant="ghost" disabled={!analysis.design || !writable || saveBlocked || pending} title={!writable ? "当前只读，另存副本需要写入权限。" : pending ? unappliedFieldsWarning : undefined} onClick={() => { void copy(); }}>另存副本</Button></div>}

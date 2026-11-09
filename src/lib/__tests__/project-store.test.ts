@@ -4,11 +4,11 @@ import { spawnSync } from "node:child_process";
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import catalogJson from "../../data/catalog/profiles.json";
-import accessoriesJson from "../../data/catalog/accessories.json";
-import designJson from "../../data/designs/standing-desk.json";
-import { AccessoryCatalogSchema, CatalogSchema, IdSchema } from "./schema";
-import { createProject, createProjectStore, getDataRoot, getStoreWritable, ProjectStoreError } from "./project-store";
+import catalogJson from "../../../data/catalog/profiles.json";
+import accessoriesJson from "../../../data/catalog/accessories.json";
+import designJson from "../../../data/designs/standing-desk.json";
+import { AccessoryCatalogSchema, CatalogSchema, IdSchema } from "../schema";
+import { createProject, createProjectStore, getDataRoot, getStoreWritable, ProjectStoreError } from "../project-store";
 
 beforeEach((t) => {
   const keys = ["ALLOYFRAME_DATA_DIR", "ALLOYFRAME_READ_ONLY", "ALLOYFRAME_TRUSTED_ORIGINS",
@@ -23,7 +23,7 @@ beforeEach((t) => {
 
 const catalog = CatalogSchema.parse(catalogJson);
 const accessories = AccessoryCatalogSchema.parse(accessoriesJson);
-const repo = path.resolve(import.meta.dirname, "../..");
+const repo = path.resolve(import.meta.dirname, "../../..");
 const status = (expected: number) => (error: unknown) => error instanceof ProjectStoreError && error.status === expected;
 
 async function fixture(t: { after: (fn: () => Promise<void>) => void }, writable = true) {
@@ -303,6 +303,7 @@ test("CLI 复用共享校验：空项目 warning 退出0；id 不匹配、旋转
   });
   const success = run(project.design.id);
   assert.equal(success.status, 0, success.stderr);
+  assert.doesNotMatch(success.stderr, /THREE_CJS_DEPRECATED|DeprecationWarning/);
   assert.match(success.stderr, /警告.*尚无零件/);
   await fs.writeFile(path.join(root, "designs/mismatch.json"), JSON.stringify({ ...project.design, id: "another" }));
   assert.equal(run("mismatch").status, 1);

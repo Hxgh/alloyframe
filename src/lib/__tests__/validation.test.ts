@@ -1,13 +1,13 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import catalogJson from "../../data/catalog/profiles.json";
-import accessoriesJson from "../../data/catalog/accessories.json";
-import designJson from "../../data/designs/standing-desk.json";
-import { AccessoryCatalogSchema, CatalogSchema, DesignSchema } from "./schema";
-import { inspectDesign } from "./validation";
-import { designBounds } from "./tslot";
-import { explodeOffsets } from "./explode";
-import { bomCsv, buildBom, cutListCsv } from "./bom";
+import catalogJson from "../../../data/catalog/profiles.json";
+import accessoriesJson from "../../../data/catalog/accessories.json";
+import designJson from "../../../data/designs/standing-desk.json";
+import { AccessoryCatalogSchema, CatalogSchema, DesignSchema } from "../schema";
+import { inspectDesign } from "../validation";
+import { designBounds } from "../tslot";
+import { explodeOffsets } from "../explode";
+import { bomCsv, buildBom, cutListCsv } from "../bom";
 
 const catalog = CatalogSchema.parse(catalogJson);
 const accessories = AccessoryCatalogSchema.parse(accessoriesJson);

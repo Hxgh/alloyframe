@@ -1,11 +1,11 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { PerspectiveCamera, Vector3 } from "three";
-import designJson from "../../data/designs/standing-desk.json";
-import { DesignSchema } from "./schema";
-import { designBounds } from "./tslot";
-import { explodeOffsets } from "./explode";
-import { combineBounds, fitDistance, frameRequest, frameView, type Vec3, type ViewAction } from "./scene-fit";
+import designJson from "../../../data/designs/standing-desk.json";
+import { DesignSchema } from "../schema";
+import { designBounds } from "../tslot";
+import { explodeOffsets } from "../explode";
+import { combineBounds, fitDistance, frameRequest, frameView, type Vec3, type ViewAction } from "../scene-fit";
 
 const design = DesignSchema.parse(designJson);
 const assembled = designBounds(design.parts);

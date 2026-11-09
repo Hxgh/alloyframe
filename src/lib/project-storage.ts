@@ -1,3 +1,46 @@
+import { draftKey, legacyDraftKey, parseDraftBackup, type DraftBackup } from "./project-draft";
+
+export type StoredDraftBackup = DraftBackup & { key: string; raw: string };
+type DraftStorage = Pick<Storage, "getItem" | "setItem" | "removeItem">;
+
+export function readProjectDrafts(storage: Pick<Storage, "getItem" | "key" | "length">, id: string, sessionId: string): StoredDraftBackup[] {
+  const backups: StoredDraftBackup[] = [];
+  const prefix = `${draftKey(id)}:`;
+  for (let index = 0; index < storage.length; index++) {
+    const key = storage.key(index);
+    if (!key?.startsWith(prefix)) continue;
+    const raw = storage.getItem(key);
+    const backup = parseDraftBackup(raw, id);
+    if (raw && backup?.sessionId && key === draftKey(id, backup.sessionId)) backups.push({ ...backup, key, raw });
+  }
+  backups.sort((a, b) => Number(b.sessionId === sessionId) - Number(a.sessionId === sessionId) || a.key.localeCompare(b.key));
+  const key = storage.getItem(draftKey(id)) !== null ? draftKey(id) : legacyDraftKey(id);
+  const raw = storage.getItem(key);
+  const backup = parseDraftBackup(raw, id);
+  if (raw && backup && !backup.sessionId) backups.push({ ...backup, key, raw });
+  return backups;
+}
+
+export function writeProjectDraft(storage: DraftStorage, id: string, sessionId: string, value: string | null): void {
+  const key = draftKey(id, sessionId);
+  if (value === null) storage.removeItem(key);
+  else {
+    const backup = parseDraftBackup(value, id);
+    if (backup?.sessionId !== sessionId) throw new Error("草稿编辑会话不匹配。");
+    storage.setItem(key, value);
+  }
+}
+
+export function migrateProjectDraft(storage: DraftStorage, id: string, sessionId: string, value: string, source: StoredDraftBackup): void {
+  writeProjectDraft(storage, id, sessionId, value);
+  // 其他会话始终保留；旧共享键仅在成功迁移且内容未变时清理。
+  if (!source.sessionId && (source.key === draftKey(id) || source.key === legacyDraftKey(id))) {
+    if (storage.getItem(source.key) !== source.raw) return;
+    if (source.key === draftKey(id) && storage.getItem(legacyDraftKey(id)) === source.raw) storage.removeItem(legacyDraftKey(id));
+    storage.removeItem(source.key);
+  }
+}
+
 export function readProjectStorage(storage: Pick<Storage, "getItem">, key: string, legacyKey: string): string | null {
   return storage.getItem(key) ?? storage.getItem(legacyKey);
 }

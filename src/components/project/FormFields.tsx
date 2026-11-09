@@ -51,19 +51,19 @@ export function FormField({
   className?: string;
 }) {
   return (
-    <div className={cn("min-w-0 space-y-1", className)}>
-      <label htmlFor={id} className="block text-sm font-medium wrap-anywhere">
+    <div className={cn("min-w-0 space-y-1.5", className)}>
+      <label htmlFor={id} className="block text-sm leading-5 font-medium wrap-anywhere">
         {label}
-        {required && <span className="ml-1 text-xs text-muted-foreground">（必填）</span>}
+        {required && <span className="ml-1 text-xs font-normal text-muted-foreground">（必填）</span>}
       </label>
       {children}
       {hint && (
-        <p id={`${id}-hint`} className="text-xs leading-relaxed text-muted-foreground wrap-anywhere">
+        <p id={`${id}-hint`} className="text-xs leading-5 text-muted-foreground wrap-anywhere">
           {hint}
         </p>
       )}
       {error && (
-        <p id={`${id}-error`} className="text-xs leading-relaxed text-destructive wrap-anywhere">
+        <p id={`${id}-error`} className="text-xs leading-5 text-destructive wrap-anywhere">
           {error}
         </p>
       )}
@@ -147,7 +147,7 @@ export function SelectField({
             <SelectItem
               key={option.value}
               value={option.value}
-              className="min-h-11 px-3 py-2 [&>span:first-child]:min-w-0 [&>span:first-child]:shrink"
+              className="min-h-[var(--control-height)] py-1.5 pr-8 pl-3 [&>span:first-child]:min-w-0 [&>span:first-child]:shrink"
             >
               <span className="min-w-0 whitespace-normal wrap-anywhere">{option.label}</span>
             </SelectItem>
@@ -180,11 +180,12 @@ export function VectorFields({
   positive?: boolean;
 }) {
   return (
-    <fieldset disabled={disabled} className="min-w-0 space-y-2">
-      <legend className="text-sm font-medium">
+    <fieldset disabled={disabled} className="vector-fields min-w-0 space-y-2 rounded-lg border border-border bg-muted/20 px-2.5 pt-1 pb-2.5">
+      <legend className="px-1 text-sm leading-5 font-medium">
         {label} <span className="text-xs font-normal text-muted-foreground">（{unit}）</span>
+        <span className="ml-1 text-xs font-normal text-muted-foreground">（必填）</span>
       </legend>
-      <div className="grid min-w-0 grid-cols-3 gap-2">
+      <div className="vector-inputs grid min-w-0 gap-2 [&_input]:px-2 [&_input]:font-mono [&_input]:tabular-nums [&_label>span]:sr-only">
         {(["X", "Y", "Z"] as const).map((axis, index) => (
           <TextField
             key={axis}
@@ -215,9 +216,9 @@ export function FormErrors({ errors }: { errors: FieldErrors }) {
   if (messages.length === 0) return null;
 
   return (
-    <div role="alert" className="rounded-lg border border-destructive/40 bg-destructive/5 p-3 text-sm">
+    <div role="alert" className="min-w-0 rounded-lg border border-destructive/40 bg-destructive/5 p-3 text-sm">
       <p className="font-medium text-destructive">尚未应用，请检查以下内容</p>
-      <ul className="mt-2 list-inside list-disc space-y-1 text-xs text-destructive">
+      <ul className="mt-1.5 list-outside list-disc space-y-1 pl-4 text-xs leading-5 text-destructive">
         {messages.map((message) => <li key={message} className="wrap-anywhere">{message}</li>)}
       </ul>
     </div>

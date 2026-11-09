@@ -49,19 +49,22 @@ export function BomPanel({ design, catalog, accessories, draft = false, invalid 
   return (
     <ScrollArea className="h-full min-w-0">
       <div className="min-w-0 px-3 pb-4 pt-3">
-        <p className="mb-3 text-xs text-muted-foreground">{draft ? "当前未保存草稿的算料" : "已保存项目的算料"}</p>
+        <div className="mb-2 flex min-w-0 items-baseline justify-between gap-2">
+          <h2 className="text-sm font-semibold">材料清单</h2>
+          <span className="shrink-0 text-xs text-muted-foreground">{draft ? "未保存草稿" : "已保存"}</span>
+        </div>
         {/* 概览 */}
         <dl className="grid min-w-0 grid-cols-2 gap-x-3 gap-y-2 rounded-lg border border-border bg-muted/40 p-3">
           <div className="min-w-0">
             <dt className="text-xs text-muted-foreground">型材总长</dt>
-            <dd className="font-mono text-sm tabular-nums wrap-anywhere">
+            <dd className="font-mono text-base font-medium leading-6 tabular-nums wrap-anywhere">
               {bom.profileLengthM.toFixed(2)}
               <span className="ml-1 text-xs text-muted-foreground">m</span>
             </dd>
           </div>
           <div className="min-w-0">
             <dt className="text-xs text-muted-foreground">总重</dt>
-            <dd className="font-mono text-sm tabular-nums wrap-anywhere">
+            <dd className="font-mono text-base font-medium leading-6 tabular-nums wrap-anywhere">
               {bom.totalMassKg.toFixed(1)}
               <span className="ml-1 text-xs text-muted-foreground">kg</span>
             </dd>
@@ -69,10 +72,10 @@ export function BomPanel({ design, catalog, accessories, draft = false, invalid 
           <div className="col-span-2 min-w-0">
             <dt className="text-xs text-muted-foreground">材料估算</dt>
             <dd className="flex min-w-0 flex-wrap items-baseline gap-2">
-              <span className="min-w-0 font-mono text-sm tabular-nums wrap-anywhere">
+              <span className="min-w-0 font-mono text-base font-medium tabular-nums wrap-anywhere">
                 ¥{bom.knownTotal.toFixed(0)}
               </span>
-              <Badge variant="outline" className="h-auto min-w-0 shrink border-border whitespace-normal px-2 text-xs font-normal">
+              <Badge variant="outline" className="h-auto min-w-0 shrink border-border whitespace-normal px-1.5 text-xs font-normal">
                 估算 · 非报价
               </Badge>
             </dd>
@@ -80,7 +83,7 @@ export function BomPanel({ design, catalog, accessories, draft = false, invalid 
         </dl>
 
         {bom.hasUnknownPrice && (
-          <p className="mt-2 px-2 text-xs leading-relaxed text-muted-foreground wrap-anywhere">
+          <p className="mt-2 text-xs leading-relaxed text-muted-foreground wrap-anywhere">
             部分项目无公开价格，未计入合计。
           </p>
         )}
@@ -113,29 +116,27 @@ export function BomPanel({ design, catalog, accessories, draft = false, invalid 
           {grouped.map(({ category, lines }) => (
             <div key={category} className="min-w-0">
               <div className="mb-1 flex min-w-0 items-baseline justify-between gap-2 px-2">
-                <span className="text-xs font-medium text-muted-foreground">
-                  {category}
-                </span>
-                <span className="font-mono text-xs text-muted-foreground">{lines.length}</span>
+                <h3 className="text-xs font-medium text-muted-foreground">{category}</h3>
+                <span className="shrink-0 font-mono text-xs text-muted-foreground">{lines.length} 项</span>
               </div>
               <ul className="min-w-0 space-y-1">
                 {lines.map((line) => (
                   <li
                     key={line.key}
-                    className="min-w-0 rounded-md px-2 py-2 transition-colors hover:bg-muted/50"
+                    className="min-w-0 rounded-lg px-2 py-1.5"
                   >
                     <div className="flex min-w-0 items-baseline gap-2">
                       <span className="min-w-0 flex-1 text-sm leading-snug wrap-anywhere">{line.label}</span>
-                      <span className="shrink-0 font-mono text-xs tabular-nums text-muted-foreground">
+                      <span className="shrink-0 font-mono text-sm tabular-nums">
                         ×{line.qty}
                       </span>
                     </div>
                     <div className="mt-1 flex min-w-0 items-baseline gap-2">
-                      <span className="min-w-0 flex-1 font-mono text-xs leading-snug text-muted-foreground wrap-anywhere">
+                      <span className="min-w-0 flex-1 font-mono text-sm leading-5 text-muted-foreground wrap-anywhere">
                         {line.spec}
                       </span>
                       {line.lineTotal != null && (
-                        <span className="shrink-0 font-mono text-xs tabular-nums">
+                        <span className="shrink-0 font-mono text-sm tabular-nums">
                           ¥{line.lineTotal.toFixed(0)}
                         </span>
                       )}

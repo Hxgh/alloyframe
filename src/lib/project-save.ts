@@ -4,6 +4,7 @@ import { designText } from "./project-draft";
 
 export const autoSaveKey = "alloyframe:autosave";
 export const legacyAutoSaveKey = "sunmao:autosave";
+export const projectChangeKey = (id: string) => `alloyframe:project-change:${id}`;
 export const autoSaveDelay = 1500;
 export const parseAutoSavePreference = (value: string | null) => value !== "false";
 

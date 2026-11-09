@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import designJson from "../../data/designs/standing-desk.json";
-import { DesignSchema, type Part } from "./schema";
-import { explodeOffsets } from "./explode";
+import designJson from "../../../data/designs/standing-desk.json";
+import { DesignSchema, type Part } from "../schema";
+import { explodeOffsets } from "../explode";
 
 const example = DesignSchema.parse(designJson).parts;
 const parts: Part[] = [
