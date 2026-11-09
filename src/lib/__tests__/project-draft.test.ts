@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { DesignSchema } from "./schema";
-import { designText, isDraftDirty, nextPartId, parseDraftBackup, serializeDraftBackup } from "./project-draft";
+import { DesignSchema } from "../schema";
+import { captureProjectExport, createDraftSessionId, designText, isDraftDirty, nextPartId, parseDraftBackup, serializeDraftBackup } from "../project-draft";
 
 const design = DesignSchema.parse({ id: "workbench", name: "工作台", units: "mm", parts: [] });
 const project = { design, fingerprint: "file-v1", updatedAt: "2026-01-01T00:00:00Z" };
@@ -71,6 +71,40 @@ test("冲突备份保留原基准，正式 saved 不需伪造成旧版本", () =
   assert.deepEqual(parseDraftBackup(raw, design.id), {
     id: design.id, fingerprint: "older-v0", text: designText(design),
   });
+  assert.equal(project.fingerprint, "file-v1");
+});
+
+test("编辑会话 ID 在私网 HTTP 缺少 randomUUID 时仍可生成且相互独立", () => {
+  const random = { getRandomValues: globalThis.crypto.getRandomValues.bind(globalThis.crypto) };
+  assert.equal("randomUUID" in random, false);
+  const first = createDraftSessionId(random);
+  const second = createDraftSessionId(random);
+  assert.match(first, /^[0-9a-f]{32}$/);
+  assert.notEqual(first, second);
+});
+
+test("编辑会话随备份往返保留，旧备份兼容且不接受无效会话", () => {
+  const raw = serializeDraftBackup("{original-text", project, "old-file", "tab-a");
+  assert.deepEqual(parseDraftBackup(raw, design.id), {
+    id: design.id, fingerprint: "old-file", text: "{original-text", sessionId: "tab-a",
+  });
+  for (const sessionId of ["", null, 1, {}]) {
+    assert.equal(parseDraftBackup(JSON.stringify({ id: design.id, fingerprint: "P0", text: "{}", sessionId }), design.id), null);
+  }
+});
+
+test("导出以规范化有效设计区分已保存与草稿，忽略输入属性顺序及服务端 revision", () => {
+  const reordered = DesignSchema.parse({ parts: [], units: "mm", name: design.name, id: design.id });
+  const savedExport = captureProjectExport({ ...reordered, revision: 3 }, project);
+  assert.equal(savedExport.draft, false);
+  assert.equal(savedExport.filename, "workbench.json");
+  assert.equal(savedExport.design, project.design);
+  const draft = { ...design, name: "尚未保存的名称" };
+  const next = captureProjectExport(draft, project);
+  assert.equal(next.draft, true);
+  assert.equal(next.filename, "workbench-draft.json");
+  assert.deepEqual(next.design, draft);
+  assert.equal(project.design.name, "工作台");
   assert.equal(project.fingerprint, "file-v1");
 });
 

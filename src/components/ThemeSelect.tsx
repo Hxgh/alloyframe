@@ -30,7 +30,7 @@ export function ThemeSelect() {
       </SelectTrigger>
       <SelectContent align="end" alignItemWithTrigger={false}>
         {THEMES.map(({ value, label, Icon: OptionIcon }) => (
-          <SelectItem key={value} value={value} className="min-h-11 text-sm">
+          <SelectItem key={value} value={value} className="text-sm">
             <OptionIcon aria-hidden="true" className="size-4" />{label}
           </SelectItem>
         ))}

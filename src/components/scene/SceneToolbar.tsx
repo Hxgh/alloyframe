@@ -12,6 +12,7 @@ type Props = {
   empty: boolean;
   fullscreen: boolean;
   fullscreenSupported: boolean;
+  fullscreenBusy: boolean;
   fullscreenContainer: RefObject<HTMLElement | null>;
   error: string;
   onAmountChange: (amount: number) => void;
@@ -25,7 +26,7 @@ const VIEWS = [
   { action: "top", label: "顶视", axis: "+Y", description: "从上方看，X 向右、−Z 朝屏幕上方" },
 ] as const;
 
-export function SceneToolbar({ amount, empty, fullscreen, fullscreenSupported, fullscreenContainer, error, onAmountChange, onView, onFullscreen }: Props) {
+export function SceneToolbar({ amount, empty, fullscreen, fullscreenSupported, fullscreenBusy, fullscreenContainer, error, onAmountChange, onView, onFullscreen }: Props) {
   const [adjusting, setAdjusting] = useState(false);
   const [dialog, setDialog] = useState<"views" | "help" | null>(null);
   const labelId = useId();
@@ -34,19 +35,21 @@ export function SceneToolbar({ amount, empty, fullscreen, fullscreenSupported, f
   return (
     <>
       <div role="group" aria-label="3D 视图工具栏" className="scene-tools border-t border-border bg-background">
-        <div className="flex min-w-0 flex-wrap items-center justify-between gap-1.5">
+        <div className="flex min-w-0 flex-wrap items-center justify-between gap-2">
           <div role="group" aria-label="视图操作" className="flex items-center gap-1">
-            <Button variant="outline" size="touch" className="px-2" onClick={() => setDialog("views")} aria-haspopup="dialog"><View className="size-4" />视角</Button>
+            <Button variant="outline" size="touch" className="scene-primary-action" onClick={() => setDialog("views")} aria-label="视角" title="切换观察方向" aria-haspopup="dialog"><View className="size-4" /><span className="scene-action-label">视角</span></Button>
             <Button variant="ghost" size="icon-touch" aria-label="适应视图" title="适应视图 · 保留观察方向" onClick={() => onView("fit")}><Focus className="size-4" /></Button>
-            <Button variant="ghost" size="icon-touch" className="hidden sm:inline-flex" aria-label="重置视角" title="重置视角 · 恢复默认斜视" onClick={() => onView("reset")}><RotateCcw className="size-4" /></Button>
-            <Button variant="ghost" size="icon-touch" aria-label={fullscreen ? "退出全屏" : "全屏视图"} title={fullscreenSupported ? fullscreen ? "退出全屏 · Esc" : "全屏视图" : "当前浏览器不支持全屏"} disabled={!fullscreenSupported} onClick={onFullscreen}>{fullscreen ? <Minimize className="size-4" /> : <Maximize className="size-4" />}</Button>
-            <Button variant="ghost" size="icon-touch" className="hidden sm:inline-flex" aria-label="坐标与拆解说明" title="坐标与拆解说明" aria-haspopup="dialog" onClick={() => setDialog("help")}><CircleHelp className="size-4" /></Button>
+            <Button variant="ghost" size="icon-touch" className="scene-extended-control" aria-label="重置视角" title="重置视角 · 恢复默认斜视" onClick={() => onView("reset")}><RotateCcw className="size-4" /></Button>
+            <Button variant="ghost" size="icon-touch" aria-label={fullscreen ? "退出全屏" : "全屏视图"} aria-pressed={fullscreen} aria-busy={fullscreenBusy}
+              title={fullscreenBusy ? "正在切换全屏…" : fullscreen ? "退出全屏 · Esc" : fullscreenSupported ? "全屏视图" : "当前浏览器不支持全屏"}
+              disabled={fullscreenBusy || (!fullscreen && !fullscreenSupported)} onClick={onFullscreen}>{fullscreen ? <Minimize className="size-4" /> : <Maximize className="size-4" />}</Button>
+            <Button variant="ghost" size="icon-touch" className="scene-extended-control" aria-label="坐标与拆解说明" title="坐标与拆解说明" aria-haspopup="dialog" onClick={() => setDialog("help")}><CircleHelp className="size-4" /></Button>
           </div>
           <div role="group" aria-label="结构展示" className="flex min-w-0 items-center gap-1">
-            <Button variant="secondary" size="touch" className="px-2" disabled={empty} onClick={() => onAmountChange(amount === 100 ? 0 : 100)} aria-label={amount === 100 ? "恢复装配" : "一键拆解"}>
-              {amount === 100 ? <Box className="size-4" /> : <Boxes className="size-4" />}{amount === 100 ? "装配" : "拆解"}
+            <Button variant="secondary" size="touch" className="scene-primary-action" disabled={empty} onClick={() => onAmountChange(amount === 100 ? 0 : 100)} aria-label={amount === 100 ? "恢复装配" : "一键拆解"} title={amount === 100 ? "恢复装配" : "一键拆解"}>
+              {amount === 100 ? <Box className="size-4" /> : <Boxes className="size-4" />}<span className="scene-action-label">{amount === 100 ? "装配" : "拆解"}</span>
             </Button>
-            <span className="hidden w-9 text-right font-mono text-xs tabular-nums text-muted-foreground min-[360px]:inline" aria-label={`分离程度 ${amount}%`}>{amount}%</span>
+            <span className="scene-separation-value w-9 shrink-0 text-right font-mono text-xs tabular-nums text-muted-foreground" aria-label={`分离程度 ${amount}%`}>{amount}%</span>
             <Button variant="ghost" size="icon-touch" aria-label="调整分离程度" title="调整分离程度" disabled={empty} aria-expanded={adjusting} aria-controls={sliderId} onClick={() => setAdjusting((value) => !value)}><SlidersHorizontal className="size-4" /></Button>
           </div>
         </div>
@@ -58,7 +61,7 @@ export function SceneToolbar({ amount, empty, fullscreen, fullscreenSupported, f
         {error && <p role="alert" className="text-xs leading-relaxed text-destructive">{error}</p>}
       </div>
       <Dialog open={dialog !== null} onOpenChange={(open) => { if (!open) setDialog(null); }}>
-        <DialogContent container={fullscreen ? fullscreenContainer : undefined}>
+        <DialogContent container={fullscreenContainer}>
           <div className="flex items-center justify-between gap-2">
             <DialogTitle>{dialog === "views" ? "切换观察方向" : "坐标与拆解说明"}</DialogTitle>
             <Button variant="ghost" size="icon-touch" aria-label="关闭视图说明" onClick={() => setDialog(null)}><X className="size-4" /></Button>
@@ -70,7 +73,7 @@ export function SceneToolbar({ amount, empty, fullscreen, fullscreenSupported, f
             </Button>)}
             <Button variant="ghost" size="touch" aria-label="重置视角" onClick={() => { setDialog(null); onView("reset"); }}><RotateCcw className="size-4" />默认斜视 · 重置视角</Button>
             <Button variant="ghost" size="touch" onClick={() => setDialog("help")}><CircleHelp className="size-4" />坐标与拆解说明</Button>
-          </div> : <div className="space-y-4 text-xs leading-relaxed">
+          </div> : <div className="space-y-4 text-sm leading-relaxed">
             <section className="space-y-2" aria-label="世界坐标约定">
               <h3 className="text-sm font-medium">右手坐标 · 全局毫米</h3>
               <p><span className="axis-x font-mono">+X</span> 向右　<span className="axis-y font-mono">+Y</span> 向上　<span className="axis-z font-mono">+Z</span> 朝正面。</p>

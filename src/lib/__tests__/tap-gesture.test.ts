@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { createTapGesture, isSelectionClick } from "./tap-gesture";
+import { createTapGesture, isSelectionClick } from "../tap-gesture";
 
 const pointer = (x = 0, y = 0, pointerId = 1) => ({ pointerId, clientX: x, clientY: y });
 

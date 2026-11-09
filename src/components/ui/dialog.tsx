@@ -11,7 +11,10 @@ function DialogContent({
   children,
   container,
   ...props
-}: DialogPrimitive.Popup.Props & { container?: DialogPrimitive.Portal.Props["container"] }) {
+}: DialogPrimitive.Popup.Props & {
+  /** 同时承载遮罩和内容；全屏场景应始终传同一容器，避免切换时重挂载。 */
+  container?: DialogPrimitive.Portal.Props["container"];
+}) {
   return (
     <DialogPrimitive.Portal container={container}>
       <DialogPrimitive.Backdrop
@@ -21,7 +24,7 @@ function DialogContent({
       <DialogPrimitive.Popup
         data-slot="dialog-content"
         className={cn(
-          "fixed left-1/2 top-1/2 z-50 max-h-[calc(100dvh_-_2rem)] w-[calc(100%_-_2rem)] max-w-md -translate-x-1/2 -translate-y-1/2 space-y-4 overflow-y-auto rounded-lg border border-border bg-background p-4 text-sm shadow-lg outline-none",
+          "fixed left-1/2 top-1/2 z-50 max-h-[calc(100dvh_-_2rem)] w-[calc(100%_-_2rem)] max-w-md -translate-x-1/2 -translate-y-1/2 space-y-4 overflow-y-auto overscroll-contain rounded-xl border border-border bg-background p-4 text-sm shadow-lg outline-none sm:p-5",
           className,
         )}
         {...props}
@@ -36,7 +39,7 @@ function DialogTitle({ className, ...props }: DialogPrimitive.Title.Props) {
   return (
     <DialogPrimitive.Title
       data-slot="dialog-title"
-      className={cn("text-sm font-semibold wrap-anywhere", className)}
+      className={cn("text-base font-semibold leading-6 wrap-anywhere", className)}
       {...props}
     />
   );

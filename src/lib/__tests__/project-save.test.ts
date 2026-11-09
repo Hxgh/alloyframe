@@ -1,13 +1,16 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { DesignSchema } from "./schema";
-import { designText, isDraftDirty, parseDraftBackup, serializeDraftBackup } from "./project-draft";
+import { readFile } from "node:fs/promises";
+import { runInNewContext } from "node:vm";
+import ts from "typescript";
+import { DesignSchema } from "../schema";
+import { designText, isDraftDirty, parseDraftBackup, serializeDraftBackup } from "../project-draft";
 import {
   acknowledgeProjectSave, autoSaveDelay, autoSaveKey, beginProjectSave, canSaveProject,
   captureProjectSave, createProjectSaveTimer, isRemoteCheckCurrent, parseAutoSavePreference,
   pauseProjectSave, type SaveConditions, type SaveSnapshot,
-} from "./project-save";
-import type { ProjectRecord } from "./projects";
+} from "../project-save";
+import type { ProjectRecord } from "../projects";
 
 const design = DesignSchema.parse({ id: "workbench", name: "工作台", units: "mm", parts: [] });
 const project = { design, fingerprint: "P0", updatedAt: "2026-01-01T00:00:00Z" };
@@ -238,6 +241,157 @@ test("未准备偏好、未应用/无效/只读等状态不调度，手动保存
   for (const values of [{ preferenceReady: false }, { autoSave: false }, { failed: true }]) {
     assert.equal(canSaveProject({ ...ready, ...values }, true), false);
     assert.equal(canSaveProject({ ...ready, ...values }), true);
+  }
+});
+
+test("两个会话并发保存只推进胜者基准，409 保留败者草稿且旧检查不能解锁", async () => {
+  const a = { ...design, name: "A" };
+  const b = { ...design, name: "B" };
+  const aSnapshot = captureProjectSave(a, designText(a), project, 1);
+  const bSnapshot = captureProjectSave(b, designText(b), project, 1);
+  const p1 = { ...project, design: { ...a, revision: 1 }, fingerprint: "P1" };
+  const nextA = acknowledgeProjectSave(aSnapshot, p1, { text: aSnapshot.text, preview: a, editVersion: 1 });
+  const nextB = { saved: project, text: bSnapshot.text, preview: b, ...pauseProjectSave(ready, 409) };
+  assert.equal(nextA.saved.fingerprint, "P1");
+  assert.equal(nextB.saved.fingerprint, "P0");
+  assert.equal(nextB.text, designText(b));
+  assert.equal(canSaveProject({ ...ready, ...nextB }), false);
+  assert.equal(parseDraftBackup(serializeDraftBackup(nextB.text, nextB.saved, "P0", "tab-b"), design.id)?.sessionId, "tab-b");
+  const oldCheck = { sequence: 1, epoch: 0, fingerprint: "P0" };
+  assert.equal(isRemoteCheckCurrent(oldCheck, { ...oldCheck, sequence: 2, epoch: 2, active: true, saving: false, leaving: false }), false);
+  assert.equal(pauseProjectSave(nextB).conflict, true);
+});
+
+test("隐藏后恢复仍须先检查文件，旧 GET 失效且取消的自动保存不补发", () => {
+  const time = clock();
+  const timer = createProjectSaveTimer(time);
+  let calls = 0;
+  timer.schedule(() => calls++);
+  const check = { sequence: 1, epoch: 0, fingerprint: "P0" };
+  timer.cancel();
+  time.tick(1500);
+  assert.equal(calls, 0);
+  assert.equal(isRemoteCheckCurrent(check, { ...check, sequence: 2, epoch: 1, active: false, saving: false, leaving: false }), false);
+  assert.equal(isRemoteCheckCurrent(check, { ...check, sequence: 3, epoch: 1, active: true, saving: false, leaving: false }), false);
+  assert.equal(canSaveProject({ ...ready, active: false }, true), false);
+  assert.equal(canSaveProject({ ...ready, active: true, conflict: true }, true), false);
+  assert.equal(canSaveProject({ ...ready, active: true }, true), true);
+});
+
+async function editorFunctions() {
+  const text = await readFile(new URL("../../components/project/ProjectEditor.tsx", import.meta.url), "utf8");
+  const source = ts.createSourceFile("ProjectEditor.tsx", text, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
+  const functions = new Map<string, ts.FunctionLikeDeclaration>();
+  function visit(node: ts.Node) {
+    const name = ts.isFunctionDeclaration(node) ? node.name?.text : ts.isVariableDeclaration(node) ? node.name.getText() : undefined;
+    let value = ts.isVariableDeclaration(node) ? node.initializer : node;
+    if (value && ts.isCallExpression(value) && value.expression.getText() === "useCallback") value = value.arguments[0];
+    if (name && value && (ts.isFunctionDeclaration(value) || ts.isArrowFunction(value))) functions.set(name, value);
+    ts.forEachChild(node, visit);
+  }
+  visit(source);
+  return {
+    text,
+    body: (name: string) => { const body = functions.get(name)?.body; assert.ok(body, name); return body.getText(); },
+    run: (name: string, bindings: Record<string, unknown>) => {
+      const value = functions.get(name);
+      assert.ok(value, name);
+      const code = ts.transpileModule(`(${value.getText()})`, { compilerOptions: { target: ts.ScriptTarget.ES2022 } }).outputText;
+      return runInNewContext(code, bindings);
+    },
+  };
+}
+
+test("编辑器隐藏取消调度并作废旧检查，恢复显示和忙碌结束均重新核对文件", async () => {
+  const { text, body } = await editorFunctions();
+  assert.match(body("pause"), /saveTimer\.cancel\(\)/);
+  assert.match(body("pause"), /invalidateRemoteChecks\(\)/);
+  assert.match(body("pause"), /activeReady\.current = false/);
+  assert.match(body("onVisibility"), /if \(visible\.current\) void checkRemote\(\)/);
+  assert.match(body("onPageHide"), /visible\.current = false/);
+  assert.match(body("onPageHide"), /pause\(\)/);
+  for (const event of ["visibilitychange", "pagehide", "pageshow", "storage"]) assert.match(text, new RegExp(`addEventListener\\("${event}"`));
+  assert.match(text, /if \(!busy && recheckPending\.current\) void checkRemote\(\)/);
+});
+
+test("采用文件推进检查代次后重新读取，导出先检查未应用与无效输入且不触发保存", async () => {
+  const { body } = await editorFunctions();
+  const adopt = body("adopt");
+  assert.ok(adopt.indexOf("baselineEpoch.current++") < adopt.indexOf("void checkRemote()"));
+  assert.ok(adopt.indexOf("checkSequence.current++") < adopt.indexOf("void checkRemote()"));
+  const exported = body("exportProject");
+  const download = exported.indexOf("downloadJson(");
+  for (const guard of ["pendingForms", "filesBlocked()", "!result.design"]) {
+    const index = exported.indexOf(guard);
+    assert.ok(index >= 0 && index < download, guard);
+    assert.ok(exported.slice(index, download).includes("return"), guard);
+  }
+  assert.doesNotMatch(exported, /\b(?:save|projectRequest)\s*\(/);
+});
+
+test("取消原生离页恢复自动保存计时，真实离页仍取消；新输入使用完整资格守卫", async () => {
+  const { run } = await editorFunctions();
+  for (const outcome of ["cancel", "leave", "pending", "conflict", "invalid"] as const) {
+    const time = clock();
+    const saveTimer = createProjectSaveTimer(time);
+    let calls = 0;
+    let backups = 0;
+    let prevented = false;
+    const conditions = { ...ready };
+    const live = { text: designText({ ...design, name: "未保存" }), saved: project, backupReady: true, pendingForms: { part: false } };
+    const beforeUnload = run("beforeUnload", {
+      saveTimer, current: { current: live }, isDraftDirty, inFlightRef: { current: null },
+      flushBackup: () => { backups++; return true; },
+      save: (automatic: boolean) => { if (canSaveProject(conditions, automatic)) calls++; },
+    });
+    saveTimer.schedule(() => calls++);
+    time.tick(1000);
+    beforeUnload({ preventDefault: () => { prevented = true; }, returnValue: "" });
+    assert.equal(prevented, true);
+    assert.equal(backups, 1);
+    if (outcome === "leave") {
+      const visible = { current: true };
+      const pause = run("pause", {
+        saveTimer, activeReady: { current: true }, invalidateRemoteChecks() {},
+        update: () => { conditions.active = false; },
+      });
+      run("onPageHide", { visible, pause, current: { current: live }, flushBackup: () => { backups++; } })();
+      assert.equal(visible.current, false);
+    } else if (outcome === "pending") conditions.pending = true;
+    else if (outcome === "conflict") conditions.conflict = true;
+    else if (outcome === "invalid") conditions.valid = false;
+    time.tick(1499);
+    assert.equal(calls, 0);
+    time.tick(1);
+    assert.equal(calls, outcome === "cancel" ? 1 : 0, outcome);
+  }
+});
+
+test("归档成功确认结果，但离开或返回后的迟到回执不能抢导航", async () => {
+  const { run } = await editorFunctions();
+  for (const outcome of ["current", "hidden", "returned"] as const) {
+    const response = deferred<void>();
+    const active = { current: true };
+    const activityEpoch = { current: 1 };
+    const notices: string[] = [];
+    let navigation = 0;
+    let resets = 0;
+    const archive = run("archive", {
+      current: { current: { saved: project, text: designText(design), writable: true, pendingForms: {}, remote: null, conflict: false } },
+      filesBlocked: () => false, isDraftDirty, flushBackup: () => true,
+      saveTimer: { cancel() {} }, active, activityEpoch,
+      update: (value: { notice?: string }) => { if (value.notice) notices.push(value.notice); },
+      projectRequest: () => response.promise, cancelBackupTimer() {},
+      prepareToLeave: () => { resets++; }, router: { push: () => { navigation++; } },
+    });
+    const completion = archive();
+    if (outcome !== "current") { active.current = false; activityEpoch.current++; }
+    if (outcome === "returned") { active.current = true; activityEpoch.current++; }
+    response.resolve();
+    await completion;
+    assert.equal(navigation, outcome === "current" ? 1 : 0, outcome);
+    assert.equal(resets, navigation);
+    assert.equal(notices.length, outcome === "current" ? 0 : 1);
   }
 });
 

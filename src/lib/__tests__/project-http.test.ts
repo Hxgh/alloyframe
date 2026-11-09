@@ -3,14 +3,14 @@ import { beforeEach, test, type TestContext } from "node:test";
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import catalogJson from "../../data/catalog/profiles.json";
-import accessoriesJson from "../../data/catalog/accessories.json";
-import designJson from "../../data/designs/standing-desk.json";
-import { assertWriteRequest, canWriteRequest, MAX_PROJECT_BODY_BYTES, readProjectJson } from "./project-http";
-import { ProjectStoreError } from "./project-store";
-import type { ProjectLibrary, ProjectRecord } from "./projects";
-import { GET as libraryGet, POST } from "../app/api/projects/route";
-import { GET as projectGet, PATCH, PUT } from "../app/api/projects/[id]/route";
+import catalogJson from "../../../data/catalog/profiles.json";
+import accessoriesJson from "../../../data/catalog/accessories.json";
+import designJson from "../../../data/designs/standing-desk.json";
+import { assertWriteRequest, canWriteRequest, MAX_PROJECT_BODY_BYTES, readProjectJson } from "../project-http";
+import { ProjectStoreError } from "../project-store";
+import type { ProjectLibrary, ProjectRecord } from "../projects";
+import { GET as libraryGet, POST } from "../../app/api/projects/route";
+import { GET as projectGet, PATCH, PUT } from "../../app/api/projects/[id]/route";
 
 const restoreEnv = (key: string, previous: string | undefined) => {
   if (previous === undefined) delete process.env[key];

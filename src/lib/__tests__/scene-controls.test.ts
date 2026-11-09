@@ -1,20 +1,24 @@
 import assert from "node:assert/strict";
 import { createRequire } from "node:module";
+import { readFile } from "node:fs/promises";
+import { pathToFileURL } from "node:url";
 import { test } from "node:test";
 import type { ComponentRef } from "react";
 import type { OrbitControls as ControlsComponent } from "@react-three/drei";
 import { PerspectiveCamera, Vector3 } from "three";
-import designJson from "../../data/designs/standing-desk.json";
-import { DesignSchema } from "./schema";
-import { designBounds } from "./tslot";
-import { applyViewFrame, frameRequest, frameView, type Vec3, type ViewAction } from "./scene-fit";
-import { sceneControls } from "./scene-controls";
+import designJson from "../../../data/designs/standing-desk.json";
+import { DesignSchema } from "../schema";
+import { designBounds } from "../tslot";
+import { applyViewFrame, frameRequest, frameView, type Vec3, type ViewAction } from "../scene-fit";
+import { sceneControls } from "../scene-controls";
 
-// 测试 drei 实际依赖的控件，不用 three/addons 中的另一份实现代替。
+// 测试 drei 实际依赖的控件，并与相机共用 ESM three，避免混用模块实例。
 const require = createRequire(import.meta.url);
 const dreiRequire = createRequire(require.resolve("@react-three/drei"));
+const controlsPackage = new URL("./package.json", pathToFileURL(dreiRequire.resolve("three-stdlib")));
+const { exports: { import: controlsEntry } } = JSON.parse(await readFile(controlsPackage, "utf8"));
 type Controls = ComponentRef<typeof ControlsComponent>;
-const { OrbitControls } = dreiRequire("three-stdlib") as {
+const { OrbitControls } = await import(new URL(controlsEntry, controlsPackage).href) as {
   OrbitControls: new (camera: PerspectiveCamera, element: HTMLElement) => Controls;
 };
 

@@ -2,13 +2,15 @@
   "name": "alloyframe",
   "version": "0.1.0",
   "private": true,
+  "license": "MIT",
+  "type": "module",
   "scripts": {
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
     "typecheck": "next typegen && tsc --noEmit --incremental false",
-    "test": "tsx --test src/lib/*.test.ts",
+    "test": "tsx --test src/lib/__tests__/*.test.ts",
     "validate": "tsx src/scripts/validate.ts"
   },
   "dependencies": {

@@ -2,10 +2,11 @@
 
 import dynamic from "next/dynamic";
 import { useTheme } from "next-themes";
-import { useMemo, useRef, useState, useSyncExternalStore, type MouseEvent, type ReactNode } from "react";
+import { useCallback, useMemo, useRef, useState, useSyncExternalStore, type MouseEvent, type ReactNode } from "react";
 import { ChevronDown, ChevronUp, Copy, Pencil, Plus, Trash2, X } from "lucide-react";
 import type { AccessoryCatalog, Catalog, Design, Part } from "@/lib/schema";
 import { explodeOffsets } from "@/lib/explode";
+import { createFullscreenController } from "@/lib/fullscreen";
 import { PartsList } from "@/components/panel/PartsList";
 import { BomPanel } from "@/components/panel/BomPanel";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -28,14 +29,6 @@ const Scene = dynamic(() => import("./scene/Scene").then((m) => m.Scene), {
     </div>
   ),
 });
-
-const subscribeClient = () => () => {};
-const clientReady = () => true;
-const serverReady = () => false;
-function subscribeFullscreen(onChange: () => void) {
-  document.addEventListener("fullscreenchange", onChange);
-  return () => document.removeEventListener("fullscreenchange", onChange);
-}
 
 type Props = {
   design: Design;
@@ -72,24 +65,24 @@ type Props = {
 
 function PartDetails({ part, onClear }: { part: Part; onClear: () => void }) {
   return (
-    <section aria-label="选中零件详情" className="mb-4 rounded-lg border border-border bg-muted/40 p-3 text-sm">
+    <section aria-label="选中零件详情" className="mb-3 rounded-lg border border-border bg-muted/40 p-3 text-sm">
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0 self-center">
-          <h2 className="font-medium">{part.role}</h2>
+          <h2 className="font-semibold wrap-anywhere">{part.role}</h2>
           <p className="break-all font-mono text-xs text-muted-foreground">{part.id}</p>
         </div>
         <Button variant="ghost" size="icon-touch" aria-label="取消选择零件" onClick={onClear}>
           <X className="size-4" />
         </Button>
       </div>
-      <dl className="mt-2 grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-2">
+      <dl className="mt-2 grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-1.5">
         <dt className="text-muted-foreground">规格</dt>
-        <dd className="break-words font-mono text-xs leading-5">{part.size.join(" × ")} mm</dd>
+        <dd className="font-mono text-sm leading-5 wrap-anywhere">{part.size.join(" × ")} mm</dd>
         <dt className="text-muted-foreground">材料</dt>
-        <dd className="break-words">{part.material}</dd>
-        {part.profile && <><dt className="text-muted-foreground">型材</dt><dd>{part.profile}</dd></>}
+        <dd className="wrap-anywhere">{part.material}</dd>
+        {part.profile && <><dt className="text-muted-foreground">型材</dt><dd className="font-mono wrap-anywhere">{part.profile}</dd></>}
       </dl>
-      {part.note && <p className="mt-3 border-t pt-2 text-xs leading-relaxed text-muted-foreground">{part.note}</p>}
+      {part.note && <p className="mt-3 border-t pt-2 text-xs leading-relaxed text-muted-foreground wrap-anywhere">{part.note}</p>}
     </section>
   );
 }
@@ -102,11 +95,14 @@ export function Workspace({ design, catalog, accessoryCatalog, project }: Props)
   const [activeTab, setActiveTab] = useState("parts");
   const [viewRequest, setViewRequest] = useState<ViewRequest>({ id: 0, action: "fit" });
   const sceneContainer = useRef<HTMLElement>(null);
-  const hydrated = useSyncExternalStore(subscribeClient, clientReady, serverReady);
-  const fullscreen = useSyncExternalStore(subscribeFullscreen, () => document.fullscreenElement !== null && document.fullscreenElement === sceneContainer.current, () => false);
-  const fullscreenSupported = hydrated && document.fullscreenEnabled && typeof document.documentElement.requestFullscreen === "function";
-  const [fullscreenError, setFullscreenError] = useState("");
-  const [fullscreenBusy, setFullscreenBusy] = useState(false);
+  const [fullscreenController] = useState(createFullscreenController);
+  const setSceneContainer = useCallback((element: HTMLElement | null) => {
+    sceneContainer.current = element;
+    fullscreenController.setElement(element);
+  }, [fullscreenController]);
+  const { fullscreen, supported: fullscreenSupported, busy: fullscreenBusy, error: fullscreenError } = useSyncExternalStore(
+    fullscreenController.subscribe, fullscreenController.getSnapshot, fullscreenController.getServerSnapshot,
+  );
   const [editingState, setEditingState] = useState<{ target: Part | "new"; epoch: number } | null>(null);
   const [deletingState, setDeletingState] = useState<{ target: Part; epoch: number } | null>(null);
   const editing = editingState?.epoch === project.formEpoch ? editingState.target : null;
@@ -126,20 +122,6 @@ export function Workspace({ design, catalog, accessoryCatalog, project }: Props)
   );
   const selectedPart = design.parts.find((p) => p.id === selectedId) ?? null;
 
-  async function toggleFullscreen() {
-    if (!fullscreenSupported || fullscreenBusy || !sceneContainer.current) return;
-    setFullscreenBusy(true);
-    setFullscreenError("");
-    try {
-      if (document.fullscreenElement === sceneContainer.current) await document.exitFullscreen();
-      else await sceneContainer.current.requestFullscreen();
-    } catch {
-      setFullscreenError("浏览器未能切换全屏。可继续使用当前画布，或检查浏览器的全屏权限。");
-    } finally {
-      setFullscreenBusy(false);
-    }
-  }
-
   function selectPart(id: string) {
     if (editing) return; // 编辑期间锁住目标，3D 点击不能丢弃表单输入。
     setSelectedId(id || null);
@@ -157,7 +139,7 @@ export function Workspace({ design, catalog, accessoryCatalog, project }: Props)
         invalid={project.invalid} saveBlocked={project.saveBlocked} onSave={project.onSave} onExport={project.onExport} onCopy={project.onCopy} onRefresh={project.onRefresh} />
       <div className="max-h-[24dvh] shrink-0 overflow-y-auto">{project.messages}</div>
       <main className="workspace-main" data-panel-open={panelOpen}>
-        <section ref={sceneContainer} className="workspace-scene" aria-label="3D 构建区">
+        <section ref={setSceneContainer} className="workspace-scene" aria-label="3D 构建区">
           <div className="relative min-h-0 flex-1" data-testid="scene-viewport">
             <Scene
               design={design}
@@ -171,7 +153,7 @@ export function Workspace({ design, catalog, accessoryCatalog, project }: Props)
               onSelect={selectPart}
             />
             <div role="img" aria-label="世界坐标方向指示：X 向右、Y 向上、Z 朝正面" className="absolute right-2 top-2 size-28" />
-            <div className="scene-coordinate-label pointer-events-none absolute right-3 top-28 rounded-md border border-border/70 bg-background/80 px-2 py-1 text-[10px] leading-4 text-muted-foreground">
+            <div className="scene-coordinate-label pointer-events-none absolute right-3 top-28 rounded-md border border-border/70 bg-background/80 px-2 py-1 text-xs leading-4 text-muted-foreground">
               <span className="axis-x font-mono">X</span> 右 · <span className="axis-y font-mono">Y</span> 上 · <span className="axis-z font-mono">Z</span> 正面
             </div>
             {design.parts.length === 0 && <div className="absolute inset-0 grid place-content-center gap-3 bg-background/70 p-4 text-center"><h2 className="text-base font-medium">从第一个零件开始</h2><p className="max-w-xs text-sm leading-relaxed text-muted-foreground">添加型材、板材或其他构件，或到项目面板粘贴设计 JSON。</p><Button size="touch" className="mx-auto" disabled={project.readOnly || project.invalid || Boolean(editing)} onClick={() => { setEditing("new"); setActiveTab("parts"); setPanelOpen(true); }}><Plus className="size-4" />添加零件</Button></div>}
@@ -182,17 +164,17 @@ export function Workspace({ design, catalog, accessoryCatalog, project }: Props)
           </div>
           <SceneToolbar amount={explodeAmount} empty={design.parts.length === 0} onAmountChange={setExplodeAmount}
             onView={(action) => setViewRequest((current) => ({ id: current.id + 1, action }))}
-            fullscreen={fullscreen} fullscreenSupported={fullscreenSupported && !fullscreenBusy} fullscreenContainer={sceneContainer}
-            error={fullscreenError} onFullscreen={() => { void toggleFullscreen(); }} />
+            fullscreen={fullscreen} fullscreenSupported={fullscreenSupported} fullscreenBusy={fullscreenBusy} fullscreenContainer={sceneContainer}
+            error={fullscreenError} onFullscreen={() => { void fullscreenController.toggle(); }} />
         </section>
 
         <aside className="workspace-panel" aria-label="设计面板">
           <Tabs value={activeTab} onValueChange={(value) => { setActiveTab(String(value)); setPanelOpen(true); }} className="flex min-h-0 min-w-0 flex-1 flex-col gap-0">
-            <div className="panel-toolbar flex shrink-0 items-center gap-2 p-2">
-              <TabsList className="panel-tab-list min-w-0 flex-1 group-data-horizontal/tabs:h-[50px]">
-                <TabsTrigger value="parts" className="min-h-11 text-sm">零件</TabsTrigger>
-                <TabsTrigger value="bom" className="min-h-11 text-sm">算料</TabsTrigger>
-                <TabsTrigger value="project" className="min-h-11 text-sm">项目</TabsTrigger>
+            <div className="panel-toolbar flex shrink-0 items-center gap-1 p-2">
+              <TabsList variant="line" className="panel-tab-list min-w-0 flex-1">
+                <TabsTrigger value="parts">零件</TabsTrigger>
+                <TabsTrigger value="bom">算料</TabsTrigger>
+                <TabsTrigger value="project">项目</TabsTrigger>
               </TabsList>
               <Button
                 variant="ghost"
@@ -203,7 +185,7 @@ export function Workspace({ design, catalog, accessoryCatalog, project }: Props)
                 title={panelOpen ? "收起面板" : "展开面板"}
                 onClick={() => setPanelOpen((open) => !open)}
               >
-                {panelOpen ? <ChevronDown className="size-4" /> : <ChevronUp className="size-4" />}
+                {panelOpen ? <ChevronDown className="panel-toggle-icon size-4" /> : <ChevronUp className="panel-toggle-icon size-4" />}
               </Button>
             </div>
             <div id="workspace-panel-content" hidden={!panelOpen} className="min-h-0 min-w-0 flex-1">
@@ -223,10 +205,10 @@ export function Workspace({ design, catalog, accessoryCatalog, project }: Props)
                     setSelectedId(part.id);
                   }}
                 /> : <PartsList design={design} selectedId={selectedId} onSelect={selectPart}>
-                  <div className="mb-3 flex flex-wrap gap-2"><Button size="touch" variant="outline" disabled={project.readOnly || project.invalid} onClick={() => setEditing("new")}><Plus className="size-4" />添加零件</Button></div>
+                  <div className="mb-3"><Button size="touch" variant="outline" className="w-full" disabled={project.readOnly || project.invalid} onClick={() => setEditing("new")}><Plus className="size-4" />添加零件</Button></div>
                   {selectedPart && <>
                     <PartDetails part={selectedPart} onClear={() => setSelectedId(null)} />
-                    <div className="mb-4 flex flex-wrap gap-2">
+                    <div className="mb-3 flex min-w-0 gap-2">
                       <Button size="touch" variant="outline" disabled={project.readOnly || project.invalid} onClick={() => setEditing(selectedPart)}><Pencil className="size-4" />编辑</Button>
                       <Button size="touch" variant="ghost" disabled={project.readOnly || project.invalid} onClick={() => {
                         const part = { ...selectedPart, id: nextPartId(design.parts.map((item) => item.id), selectedPart.id) };

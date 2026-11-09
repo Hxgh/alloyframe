@@ -177,14 +177,14 @@ function PartEditorForm({
 
   return (
     <ScrollArea className="h-full min-h-0 min-w-0">
-      <form onSubmit={apply} noValidate className="min-w-0 space-y-4 p-4 text-sm" aria-label={part ? "编辑零件" : "新建零件"}>
+      <form onSubmit={apply} noValidate className="min-w-0 space-y-4 p-3 text-sm" aria-label={part ? "编辑零件" : "新建零件"}>
         <div className="space-y-1">
           <h2 className="text-sm font-semibold">{readOnly ? "零件详情" : part ? "编辑零件" : "新建零件"}</h2>
-          <p className="text-xs leading-relaxed text-muted-foreground">
-            {readOnly ? "当前项目只读，不能修改零件。" : "应用后仅更新当前项目草稿，不会写入正式文件。"}
+          <p className="text-xs leading-5 text-muted-foreground">
+            {readOnly ? "当前项目只读，不能修改零件。" : "应用后更新当前项目草稿；有效草稿按自动保存设置写入文件，也可手动保存。"}
           </p>
         </div>
-        {changed && <p role="status" className="text-xs leading-relaxed text-destructive">{unappliedFieldsWarning}</p>}
+        {changed && <p role="status" className="text-xs leading-5 text-destructive">{unappliedFieldsWarning}</p>}
         <FormErrors errors={errors} />
         <TextField
           id={`${prefix}-id`}
@@ -266,7 +266,7 @@ function PartEditorForm({
             rows={3}
           />
         </FormField>
-        <div className="flex flex-wrap gap-2 border-t border-border pt-4">
+        <div className="grid min-w-0 grid-cols-1 gap-2 border-t border-border pt-3">
           <Button type="submit" size="touch" disabled={readOnly}>
             <CheckIcon className="size-4" aria-hidden="true" />
             {part ? "应用零件修改" : "添加零件"}
