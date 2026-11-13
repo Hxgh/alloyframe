@@ -3,7 +3,7 @@ import { test } from "node:test";
 import { draftKey, legacyDraftKey, parseDraftBackup, serializeDraftBackup } from "../project-draft";
 import { DesignSchema } from "../schema";
 import { autoSaveKey, legacyAutoSaveKey, parseAutoSavePreference } from "../project-save";
-import { migrateProjectDraft, readProjectDrafts, readProjectStorage, writeProjectDraft, writeProjectStorage } from "../project-storage";
+import { migrateProjectDraft, readProjectDrafts, readProjectStorage, serializeProjectDraft, writeProjectDraft, writeProjectStorage } from "../project-storage";
 
 function storage(initial: Record<string, string> = {}) {
   const values = new Map(Object.entries(initial));
@@ -123,6 +123,26 @@ test("清新键失败时旧键已清除，保留新备份并报告失败", () =>
 
 const project = { design: DesignSchema.parse({ id, name: "工作台", units: "mm", parts: [] }), fingerprint: "P0", updatedAt: "2026-01-01T00:00:00Z" };
 const sessionDraft = (sessionId: string, text: string, fingerprint = "P0") => serializeDraftBackup(text, project, fingerprint, sessionId)!;
+
+test("不确定结果即使与基准相同也可重开恢复，兼容旧备份且不覆盖其他会话", () => {
+  const original = JSON.stringify(project.design, null, 2);
+  const local = storage({ [draftKey(id, "tab-b")]: sessionDraft("tab-b", "{other") });
+  const raw = serializeProjectDraft(original, project, "P0", "tab-a", true);
+  assert.ok(raw);
+  writeProjectDraft(local, id, "tab-a", raw);
+  const [backup, other] = readProjectDrafts(local, id, "tab-a");
+  assert.deepEqual({ text: backup.text, fingerprint: backup.fingerprint, uncertain: backup.uncertain },
+    { text: original, fingerprint: "P0", uncertain: true });
+  assert.equal(other.uncertain, undefined);
+  assert.deepEqual(parseDraftBackup(raw, id), { id, fingerprint: "P0", text: original, sessionId: "tab-a" });
+  assert.equal(serializeProjectDraft(original, project, "P0", "tab-a", false), null);
+  const next = serializeProjectDraft(backup.text, project, backup.fingerprint, "tab-c", true);
+  assert.ok(next);
+  migrateProjectDraft(local, id, "tab-c", next, backup);
+  assert.equal(local.values.get(backup.key), raw);
+  assert.equal(readProjectDrafts(local, id, "tab-c")[0].uncertain, true);
+  assert.equal(local.values.get(other.key), other.raw);
+});
 
 test("同一项目多个编辑会话独立写入，读取保留各自原文、ID和指纹", () => {
   const local = storage();

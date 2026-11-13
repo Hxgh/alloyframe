@@ -15,7 +15,7 @@ export async function POST(request: Request) {
     assertWriteRequest(request);
     const body = CreateProjectRequestSchema.parse(await readProjectJson(request));
     switch (body.action) {
-      case "create": return projectJson(await createProject(body.name), 201);
+      case "create": return projectJson(await createProject(body.name, body.templateId), 201);
       case "import": return projectJson(await importProject(body.design, body.name), 201);
       case "copy": return projectJson(await copyProject(body.id, body.name, body.fingerprint), 201);
     }

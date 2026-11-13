@@ -5,7 +5,8 @@ import designJson from "../../../data/designs/standing-desk.json";
 import { DesignSchema } from "../schema";
 import { designBounds } from "../tslot";
 import { explodeOffsets } from "../explode";
-import { combineBounds, fitDistance, frameRequest, frameView, type Vec3, type ViewAction } from "../scene-fit";
+import { boundsWithGuides, cameraBounds, combineBounds, fitDistance, frameRequest, frameView, visibleBoundsDistance, type Vec3, type ViewAction } from "../scene-fit";
+import { buildDimensionGuides } from "../scene-dimensions";
 
 const design = DesignSchema.parse(designJson);
 const assembled = designBounds(design.parts);
@@ -33,6 +34,86 @@ test("窄画布取景距离增大，水平和垂直都完整覆盖拆解过程",
         }
       }
     }
+  }
+});
+
+test("小模型按真实尺寸拟合，空模型和极小模型保留安全余量", () => {
+  for (const size of [40, 1, 0.001]) {
+    const box = designBounds([{ size: [size, size, size], position: [0, size / 2, 0] }]);
+    const fitted = cameraBounds(box);
+    const expected = Math.max(1, Math.hypot(size, size, size) / 2);
+    assert.ok(Math.abs(fitted.radius - expected) < 1e-10);
+    for (const aspect of [0.25, 1, 2.8]) {
+      const frame = frameView(fitted, 38, aspect);
+      assert.ok(frame.near > 0 && frame.far > frame.maxDistance);
+      assert.ok(Math.abs(distance(frame.position, frame.target) - frame.fitDistance) < 1e-7);
+    }
+  }
+  const empty = designBounds([]);
+  assert.equal(cameraBounds(empty, true), empty);
+  assert.equal(empty.radius, 200);
+  assert.equal(boundsWithGuides(cameraBounds(empty, true), []).radius, 200, "空标注不能丢失默认半径");
+});
+
+test("打开尺寸标注时取景范围包含标线和标牌，关闭时不扩大模型", () => {
+  const part = DesignSchema.parse({ id: "small", name: "小零件", units: "mm", parts: [{
+    id: "box", kind: "box", role: "方块", material: "铝", size: [40, 40, 40], position: [0, 20, 0],
+  }] }).parts[0];
+  const raw = designBounds([part]);
+  const model = cameraBounds(raw);
+  const guides = buildDimensionGuides([part], part.id);
+  const fitted = boundsWithGuides(model, guides);
+  assert.ok(fitted.radius > model.radius);
+  for (const aspect of [0.25, 1, 2.8]) {
+    for (const angle of [-2.4, -0.7, 0.6, 2.4]) {
+      const frame = frameView(fitted, 38, aspect, {
+        target: fitted.center,
+        position: [fitted.center[0] + Math.cos(angle), fitted.center[1] + 0.7, fitted.center[2] + Math.sin(angle)],
+      });
+      const camera = new PerspectiveCamera(38, aspect, frame.near, frame.far);
+      camera.position.fromArray(frame.position);
+      camera.lookAt(new Vector3(...frame.target));
+      camera.updateMatrixWorld();
+      for (const guide of guides) for (const point of [guide.start, guide.end, guide.labelPosition]) {
+        const ndc = new Vector3(...point).project(camera);
+        assert.ok(Math.abs(ndc.x) < 1 && Math.abs(ndc.y) < 1, `aspect=${aspect} angle=${angle} guide=${guide.id}`);
+      }
+    }
+  }
+});
+
+test("标牌边界使用实际 badgeHeight，包围多行文字及四角", () => {
+  const model = cameraBounds(designBounds([{ size: [2, 2, 2], position: [0, 1, 0] }]));
+  const guide = {
+    start: [0, 0, 0] as Vec3, end: [1, 0, 0] as Vec3,
+    anchorA: [0, 0, 0] as Vec3, anchorB: [1, 0, 0] as Vec3,
+    labelPosition: [3, 2, 0] as Vec3, label: "尺寸很长\n1 × 2 × 3 mm", badgeHeight: 2,
+  };
+  const fitted = boundsWithGuides(model, [guide]);
+  assert.ok(fitted.radius < 30, "小标牌不能沿用旧的 24mm 下限");
+  const width = guide.badgeHeight * (guide.label.split("\n")[1].length * 1.2 + 2) / (1.25 * 2 + 0.85);
+  const padding = Math.hypot(width, guide.badgeHeight) / 2;
+  for (let i = 0; i < 3; i++) {
+    assert.ok(fitted.min[i] <= guide.labelPosition[i] - padding);
+    assert.ok(fitted.max[i] >= guide.labelPosition[i] + padding);
+  }
+});
+
+test("已可见的包围盒不后退，裁切时保持目标和方向即可移入视锥", () => {
+  const camera = new PerspectiveCamera(38, 1, 0.1, 1000);
+  camera.position.set(0, 0, 10);
+  camera.lookAt(0, 0, 0);
+  camera.updateMatrixWorld();
+  const box = { min: [-2, -2, -2] as Vec3, max: [2, 2, 2] as Vec3, center: [0, 0, 0] as Vec3, radius: Math.sqrt(12) };
+  assert.equal(visibleBoundsDistance(box, camera, [0, 0, 0], 1), 0);
+  camera.position.z = 3;
+  const extra = visibleBoundsDistance(box, camera, [0, 0, 0], 1);
+  assert.ok(extra > 0);
+  camera.position.z += extra;
+  camera.updateMatrixWorld();
+  for (const x of [-2, 2]) for (const y of [-2, 2]) for (const z of [-2, 2]) {
+    const p = new Vector3(x, y, z).project(camera);
+    assert.ok(Math.abs(p.x) <= 1 && Math.abs(p.y) <= 1 && Math.abs(p.z) <= 1);
   }
 });
 
@@ -134,6 +215,21 @@ test("显式适应视图重新居中，保留用户观察方向且不改变设�
   const newDirection = new Vector3(...frame.position).sub(new Vector3(...frame.target)).normalize();
   assert.ok(oldDirection.distanceTo(newDirection) < 1e-10);
   assert.equal(JSON.stringify(design), before);
+});
+
+test("连续适应视图保持当前方向，不隐式重置为默认斜视", () => {
+  const centered = frameRequest(bounds, 38, 1.5, { id: 1, action: "front" });
+  const view = { position: centered.position, target: centered.target };
+  const previous = { bounds, requestId: 1, distance: centered.fitDistance };
+  const first = frameRequest(bounds, 38, 1.5, { id: 2, action: "fit" }, view, previous);
+  const second = frameRequest(bounds, 38, 1.5, { id: 3, action: "fit" }, first, {
+    bounds, requestId: 2, distance: first.fitDistance,
+  });
+  assert.ok(distance(first.position, centered.position) < 1e-8);
+  assert.ok(distance(second.position, centered.position) < 1e-8);
+  assert.deepEqual(first.target, bounds.center);
+  assert.deepEqual(second.target, bounds.center);
+  assert.notDeepEqual(second.position, frameRequest(bounds, 38, 1.5, { id: 4, action: "reset" }).position);
 });
 
 test("极窄画布的最远允许距离仍在远裁剪面内", () => {

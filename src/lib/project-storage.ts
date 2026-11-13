@@ -1,6 +1,21 @@
-import { draftKey, legacyDraftKey, parseDraftBackup, type DraftBackup } from "./project-draft";
+import { draftKey, legacyDraftKey, parseDraftBackup, serializeDraftBackup, type DraftBackup } from "./project-draft";
+import type { ProjectRecord } from "./projects";
 
-export type StoredDraftBackup = DraftBackup & { key: string; raw: string };
+export type StoredDraftBackup = DraftBackup & { key: string; raw: string; uncertain?: boolean };
+
+/** 保存结果尚未确认时，即使原文等于旧文件，也要保留基准以便之后核对。 */
+export function serializeProjectDraft(text: string, saved: ProjectRecord, fingerprint: string, sessionId: string, uncertain: boolean): string | null {
+  return uncertain
+    ? JSON.stringify({ id: saved.design.id, fingerprint, text, sessionId, uncertain: true })
+    : serializeDraftBackup(text, saved, fingerprint, sessionId);
+}
+
+function storedDraft(raw: string, key: string, id: string): StoredDraftBackup | null {
+  const backup = parseDraftBackup(raw, id);
+  if (!backup) return null;
+  const value = JSON.parse(raw) as { uncertain?: unknown };
+  return { ...backup, key, raw, ...(value.uncertain === true ? { uncertain: true } : {}) };
+}
 type DraftStorage = Pick<Storage, "getItem" | "setItem" | "removeItem">;
 
 export function readProjectDrafts(storage: Pick<Storage, "getItem" | "key" | "length">, id: string, sessionId: string): StoredDraftBackup[] {
@@ -10,14 +25,14 @@ export function readProjectDrafts(storage: Pick<Storage, "getItem" | "key" | "le
     const key = storage.key(index);
     if (!key?.startsWith(prefix)) continue;
     const raw = storage.getItem(key);
-    const backup = parseDraftBackup(raw, id);
-    if (raw && backup?.sessionId && key === draftKey(id, backup.sessionId)) backups.push({ ...backup, key, raw });
+    const backup = raw ? storedDraft(raw, key, id) : null;
+    if (backup?.sessionId && key === draftKey(id, backup.sessionId)) backups.push(backup);
   }
   backups.sort((a, b) => Number(b.sessionId === sessionId) - Number(a.sessionId === sessionId) || a.key.localeCompare(b.key));
   const key = storage.getItem(draftKey(id)) !== null ? draftKey(id) : legacyDraftKey(id);
   const raw = storage.getItem(key);
-  const backup = parseDraftBackup(raw, id);
-  if (raw && backup && !backup.sessionId) backups.push({ ...backup, key, raw });
+  const backup = raw ? storedDraft(raw, key, id) : null;
+  if (backup && !backup.sessionId) backups.push(backup);
   return backups;
 }
 

@@ -63,7 +63,7 @@ export function BomPanel({ design, catalog, accessories, draft = false, invalid 
             </dd>
           </div>
           <div className="min-w-0">
-            <dt className="text-xs text-muted-foreground">总重</dt>
+            <dt className="text-xs text-muted-foreground">估算重量</dt>
             <dd className="font-mono text-base font-medium leading-6 tabular-nums wrap-anywhere">
               {bom.totalMassKg.toFixed(1)}
               <span className="ml-1 text-xs text-muted-foreground">kg</span>
@@ -73,7 +73,7 @@ export function BomPanel({ design, catalog, accessories, draft = false, invalid 
             <dt className="text-xs text-muted-foreground">材料估算</dt>
             <dd className="flex min-w-0 flex-wrap items-baseline gap-2">
               <span className="min-w-0 font-mono text-base font-medium tabular-nums wrap-anywhere">
-                ¥{bom.knownTotal.toFixed(0)}
+                {bom.lines.some((line) => line.lineTotal != null) ? `¥${bom.knownTotal.toFixed(0)}` : "暂无估价"}
               </span>
               <Badge variant="outline" className="h-auto min-w-0 shrink border-border whitespace-normal px-1.5 text-xs font-normal">
                 估算 · 非报价
@@ -82,11 +82,9 @@ export function BomPanel({ design, catalog, accessories, draft = false, invalid 
           </div>
         </dl>
 
-        {bom.hasUnknownPrice && (
-          <p className="mt-2 text-xs leading-relaxed text-muted-foreground wrap-anywhere">
-            部分项目无公开价格，未计入合计。
-          </p>
-        )}
+        <p className="mt-2 text-xs leading-relaxed text-muted-foreground wrap-anywhere">
+          重量不含配件，部分零件按尺寸估算。{bom.hasUnknownPrice && "未设置价格的项目未计入合计。"}
+        </p>
 
         <div className="mt-3 grid min-w-0 grid-cols-2 gap-2">
           <Button

@@ -5,25 +5,31 @@ import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type FormEvent } from "react";
 import { Archive, ArrowUpRight, Copy, FileJson, FolderOpen, Plus, RotateCcw } from "lucide-react";
 import type { ProjectLibrary as Library, ProjectRecord, ProjectSummary } from "@/lib/projects";
-import { createProjectImportReader, projectRequest } from "@/lib/project-client";
+import { createProjectImportReader, ProjectRequestError, projectRequest } from "@/lib/project-client";
+import { PROJECT_TEMPLATES, type ProjectTemplateId } from "@/lib/project-templates";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { ThemeSelect } from "@/components/ThemeSelect";
 import { ConfirmDialog } from "./ConfirmDialog";
 
 type Props = { initial: Library };
-type FormMode = { type: "create" | "import" } | { type: "rename"; project: ProjectSummary };
+type FormMode = { type: "create"; templateId?: ProjectTemplateId } | { type: "import" } | { type: "rename"; project: ProjectSummary };
 const dateFormat = new Intl.DateTimeFormat("zh-CN", { dateStyle: "medium", timeZone: "UTC" });
 
 export function ProjectLibrary({ initial }: Props) {
   const router = useRouter();
   const [library, setLibrary] = useState(initial);
   const [writable, setWritable] = useState(false);
+  const [permissionReady, setPermissionReady] = useState(false);
+  const [checkError, setCheckError] = useState("");
+  const [writeRejected, setWriteRejected] = useState(false);
   const [query, setQuery] = useState("");
   const [archived, setArchived] = useState(false);
   const [form, setForm] = useState<FormMode | null>(null);
   const [name, setName] = useState("");
+  const nameEdited = useRef(false);
   const [json, setJson] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
@@ -43,8 +49,10 @@ export function ProjectLibrary({ initial }: Props) {
       const result = await projectRequest<Library>("/api/projects");
       setLibrary(result);
       setWritable(result.writable);
+      setPermissionReady(true);
+      setCheckError("");
     } catch (cause) {
-      setError((cause as Error).message);
+      setCheckError((cause as Error).message);
     }
   }, []);
   useEffect(() => {
@@ -57,6 +65,7 @@ export function ProjectLibrary({ initial }: Props) {
   function showForm(value: FormMode) {
     importReader.cancel();
     setForm(value);
+    nameEdited.current = false;
     setName(value.type === "rename" ? value.project.name : "");
     setJson("");
     setError("");
@@ -72,7 +81,9 @@ export function ProjectLibrary({ initial }: Props) {
       if (form.type === "rename") {
         await projectRequest(`/api/projects/${form.project.id}`, { method: "PATCH", body: JSON.stringify({ action: "rename", name, fingerprint: form.project.fingerprint }) });
       } else {
-        const body = form.type === "import" ? { action: "import", design: JSON.parse(json), name: name.trim() || undefined } : { action: "create", name };
+        const body = form.type === "import"
+          ? { action: "import", design: JSON.parse(json), name: name.trim() || undefined }
+          : { action: "create", name, ...(form.templateId && form.templateId !== "blank" ? { templateId: form.templateId } : {}) };
         const project = await projectRequest<ProjectRecord>("/api/projects", { method: "POST", body: JSON.stringify(body) });
         setForm(null);
         setName("");
@@ -83,6 +94,7 @@ export function ProjectLibrary({ initial }: Props) {
       setForm(null);
       await refresh();
     } catch (cause) {
+      if (cause instanceof ProjectRequestError && cause.status === 403) setWriteRejected(true);
       setError(cause instanceof SyntaxError ? "JSON 无法解析，请检查逗号、引号和括号。" : (cause as Error).message);
     } finally {
       setBusy(false);
@@ -101,6 +113,7 @@ export function ProjectLibrary({ initial }: Props) {
       setArchive(null);
       await refresh();
     } catch (cause) {
+      if (cause instanceof ProjectRequestError && cause.status === 403) setWriteRejected(true);
       setError((cause as Error).message);
     } finally {
       setBusy(false);
@@ -121,20 +134,57 @@ export function ProjectLibrary({ initial }: Props) {
           <section className="flex flex-wrap items-end justify-between gap-3">
             <div className="space-y-1">
               <h1 className="text-xl font-semibold tracking-tight">项目</h1>
-              <p className="text-sm leading-6 text-muted-foreground">一份结构，一个项目。从空白开始，也可以复制现有设计。</p>
+              <p className="text-sm leading-6 text-muted-foreground">新建项目，或导入已有设计。</p>
             </div>
             <div className="flex flex-wrap gap-2">
               <Button variant="outline" size="touch" disabled={!writable || busy} onClick={() => showForm({ type: "import" })}><FileJson className="size-4" />导入 JSON</Button>
               <Button size="touch" disabled={!writable || busy} onClick={() => showForm({ type: "create" })}><Plus className="size-4" />新建项目</Button>
             </div>
           </section>
-          <p className="rounded-lg border bg-muted/40 p-3 text-xs leading-5 text-muted-foreground">{writable ? "项目保存在当前服务的 JSON 文件中；与连接此服务的设备共享。未保存草稿仅在本浏览器恢复。" : "只读模式：可以查看和导出项目。写入仅对本机或显式配置的受信私网来源开放。"}</p>
+          {!writable && !checkError && <p role="status" className="rounded-lg border bg-muted/40 p-3 text-xs leading-5 text-muted-foreground">
+            {!permissionReady ? "正在检查写入权限…" : "当前无法写入，可查看项目。"}
+          </p>}
+          {writeRejected && <p role="status" className="rounded-lg border bg-muted/40 p-3 text-xs leading-5 text-muted-foreground">上次写入被拒绝，请检查服务权限。</p>}
+          {checkError && <p role="alert" className="rounded-lg border border-destructive/40 bg-destructive/5 p-3 text-sm leading-6 text-destructive wrap-anywhere">项目库检查失败：{checkError}切回页面可重试。</p>}
           {error && <p role="alert" className="rounded-lg border border-destructive/40 bg-destructive/5 p-3 text-sm leading-6 text-destructive wrap-anywhere">{error}</p>}
           {form && (
             <section className="min-w-0 rounded-lg border bg-card p-3" aria-label={form.type === "create" ? "新建项目" : form.type === "import" ? "导入项目" : "重命名项目"}>
               <form onSubmit={submit} className="min-w-0 space-y-4">
-                <h2 className="text-sm font-semibold">{form.type === "create" ? "新建空白项目" : form.type === "import" ? "导入为新项目" : "重命名项目"}</h2>
-                <label className="grid min-w-0 gap-1.5 text-sm"><span className="font-medium">{form.type === "import" ? "项目名称（留空沿用 JSON 名称）" : "项目名称"}<span className="ml-1 text-xs font-normal text-muted-foreground">{form.type === "import" ? "（可选）" : "（必填）"}</span></span><Input value={name} onChange={(event) => setName(event.target.value)} required={form.type !== "import"} maxLength={120} disabled={busy} /></label>
+                <h2 className="text-sm font-semibold">{form.type === "create" ? "新建项目" : form.type === "import" ? "导入为新项目" : "重命名项目"}</h2>
+                <label className="grid min-w-0 gap-1.5 text-sm"><span className="font-medium">{form.type === "import" ? "项目名称（留空沿用 JSON 名称）" : "项目名称"}<span className="ml-1 text-xs font-normal text-muted-foreground">{form.type === "import" ? "（可选）" : "（必填）"}</span></span><Input value={name} onChange={(event) => { nameEdited.current = true; setName(event.target.value); }} required={form.type !== "import"} maxLength={120} disabled={busy} /></label>
+                {form.type === "create" && (() => {
+                  const selectedTemplate = PROJECT_TEMPLATES.find((item) => item.id === (form.templateId ?? "blank"));
+                  if (!selectedTemplate) throw new Error(`未知项目模板: ${String(form.templateId)}`);
+                  return (
+                    <div className="grid min-w-0 gap-1.5 text-sm">
+                      <span className="font-medium">起始构型模板</span>
+                      <Select
+                        value={selectedTemplate.id}
+                        items={PROJECT_TEMPLATES.map((item) => ({ value: item.id, label: item.label }))}
+                        onValueChange={(value) => {
+                          if (!value) return;
+                          const nextTemplate = PROJECT_TEMPLATES.find((item) => item.id === value);
+                          if (!nextTemplate) { setError(`未知项目模板: ${value}`); return; }
+                          setForm({ type: "create", templateId: nextTemplate.id });
+                          if (!nameEdited.current) setName(nextTemplate.id === "blank" ? "" : nextTemplate.label);
+                        }}
+                        disabled={busy}
+                      >
+                        <SelectTrigger size="touch" className="w-full min-w-0" aria-label="起始构型模板">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent align="start" alignItemWithTrigger={false}>
+                          {PROJECT_TEMPLATES.map((item) => (
+                            <SelectItem key={item.id} value={item.id} className="min-h-[var(--control-height)] py-1.5 pr-8 pl-3">
+                              <span className="min-w-0 whitespace-normal wrap-anywhere">{item.label}</span>
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <p className="text-xs leading-5 text-muted-foreground">{selectedTemplate.summary}</p>
+                    </div>
+                  );
+                })()}
                 {form.type === "import" && <>
                   <label className="grid min-w-0 gap-1.5 text-sm"><span className="font-medium">粘贴设计 JSON<span className="ml-1 text-xs font-normal text-muted-foreground">（必填）</span></span><Textarea value={json} onChange={(event) => { importReader.cancel(); setJson(event.target.value); }} className="min-h-52 font-mono" required disabled={busy} spellCheck={false} /></label>
                   <label className="grid min-w-0 gap-1.5 text-sm"><span className="font-medium">或读取 JSON 文件</span><input type="file" accept=".json,application/json" className="min-h-[var(--control-height)] w-full min-w-0 max-w-full rounded-lg border bg-background px-3 py-1 text-base outline-none file:mr-3 file:rounded-md file:border-0 file:bg-muted file:px-2 file:py-0.5 file:text-sm focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50 md:text-sm" disabled={busy} onChange={(event) => {
@@ -156,11 +206,11 @@ export function ProjectLibrary({ initial }: Props) {
               <Button size="touch" variant={archived ? "secondary" : "ghost"} aria-pressed={archived} onClick={() => setArchived(true)}>已归档 {library.archived.length}</Button>
             </div>
           </div>
-          {projects.length === 0 ? <section className="grid min-h-52 place-content-center gap-3 rounded-lg border border-dashed p-6 text-center"><FolderOpen className="mx-auto size-6 text-muted-foreground" /><h2 className="text-sm font-medium">{query ? "没有匹配的项目" : archived ? "暂无归档项目" : "还没有项目"}</h2><p className="text-xs text-muted-foreground">{query ? "试试其他关键词。" : archived ? "归档项目会保留数据，可以随时恢复。" : "新建空白项目，或导入已有设计 JSON。"}</p></section> : (
+          {projects.length === 0 ? <section className="grid min-h-52 place-content-center gap-3 rounded-lg border border-dashed p-6 text-center"><FolderOpen className="mx-auto size-6 text-muted-foreground" /><h2 className="text-sm font-medium">{query ? "没有匹配的项目" : archived ? "暂无归档项目" : "还没有项目"}</h2><p className="text-xs text-muted-foreground">{query ? "试试其他关键词。" : archived ? "归档项目会保留数据，可以随时恢复。" : "新建项目，或导入已有设计。"}</p></section> : (
             <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
               {projects.map((project) => (
                 <article key={project.id} className="flex min-w-0 flex-col rounded-lg border bg-card p-3">
-                  <div className="flex items-start justify-between gap-2"><h2 className="min-w-0 flex-1 text-sm leading-5 font-semibold wrap-anywhere">{project.name}</h2><span className={project.status === "invalid" ? "shrink-0 rounded-md bg-destructive/10 px-2 py-0.5 text-xs leading-5 text-destructive" : "shrink-0 rounded-md bg-muted px-2 py-0.5 text-xs leading-5 text-muted-foreground"}>{project.status === "invalid" ? "需修复" : project.status === "empty" ? "待添加零件" : "有效设计"}</span></div>
+                  <div className="flex items-start justify-between gap-2"><h2 className="min-w-0 flex-1 text-sm leading-5 font-semibold wrap-anywhere">{project.name}</h2><span className={project.status === "invalid" ? "shrink-0 rounded-md bg-destructive/10 px-2 py-0.5 text-xs leading-5 text-destructive" : "shrink-0 rounded-md bg-muted px-2 py-0.5 text-xs leading-5 text-muted-foreground"}>{project.status === "invalid" ? "需修复" : project.status === "empty" ? "待添加零件" : "可打开"}</span></div>
                   <p className="mt-2 min-h-10 text-xs leading-5 text-muted-foreground wrap-anywhere">{project.description || "暂无项目说明"}</p>
                   <div className="mt-2 mb-3 space-y-1">
                     <p className="truncate font-mono text-xs leading-5 text-muted-foreground" title={project.id}>{project.id}</p>

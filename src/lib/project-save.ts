@@ -15,6 +15,7 @@ export type SaveConditions = {
   writable: boolean;
   busy: boolean;
   saving: boolean;
+  uncertain: boolean;
   backupReady: boolean;
   backup: boolean;
   remote: boolean;
@@ -28,10 +29,10 @@ export type SaveConditions = {
 };
 
 export function canSaveProject(state: SaveConditions, automatic = false): boolean {
-  return state.valid && state.dirty && state.writable && state.backupReady && state.active
+  return state.valid && (state.dirty || state.uncertain) && state.writable && state.backupReady && state.active
     && !state.pending && !state.busy && !state.saving && !state.backup && !state.remote
     && !state.conflict && !state.confirmation && !state.leaving
-    && (!automatic || (state.preferenceReady && state.autoSave && !state.failed));
+    && (!automatic || (!state.uncertain && state.preferenceReady && state.autoSave && !state.failed));
 }
 
 export function pauseProjectSave(state: Pick<SaveConditions, "conflict" | "writable">, status?: number) {

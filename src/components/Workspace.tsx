@@ -2,8 +2,8 @@
 
 import dynamic from "next/dynamic";
 import { useTheme } from "next-themes";
-import { useCallback, useMemo, useRef, useState, useSyncExternalStore, type MouseEvent, type ReactNode } from "react";
-import { ChevronDown, ChevronUp, Copy, Pencil, Plus, Trash2, X } from "lucide-react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type MouseEvent, type ReactNode, type TouchEvent } from "react";
+import { ChevronDown, ChevronUp, Copy, FlipHorizontal2, Pencil, Plus, Trash2, X } from "lucide-react";
 import type { AccessoryCatalog, Catalog, Design, Part } from "@/lib/schema";
 import { explodeOffsets } from "@/lib/explode";
 import { createFullscreenController } from "@/lib/fullscreen";
@@ -18,7 +18,7 @@ import type { ViewRequest } from "@/lib/scene-fit";
 import { PartEditor } from "@/components/project/PartEditor";
 import { ProjectPanel } from "@/components/project/ProjectPanel";
 import { ConfirmDialog } from "@/components/project/ConfirmDialog";
-import { nextPartId, unappliedFieldsWarning, type PendingProjectForm } from "@/lib/project-draft";
+import { mirrorPart, nextPartId, unappliedFieldsWarning, type MirrorAxis, type PendingProjectForm } from "@/lib/project-draft";
 import type { ValidationIssue } from "@/lib/projects";
 
 const Scene = dynamic(() => import("./scene/Scene").then((m) => m.Scene), {
@@ -29,6 +29,26 @@ const Scene = dynamic(() => import("./scene/Scene").then((m) => m.Scene), {
     </div>
   ),
 });
+
+// 与 globals.css 的移动布局保持一致；短横屏也使用覆盖式抽屉。
+const MOBILE_WORKSPACE_QUERY = "(max-width: 639px), (max-width: 1023px) and (max-height: 540px) and (orientation: landscape)";
+
+type PanelTab = "parts" | "bom" | "project";
+
+function subscribeMobileWorkspace(onChange: () => void) {
+  const media = window.matchMedia(MOBILE_WORKSPACE_QUERY);
+  media.addEventListener("change", onChange);
+  return () => media.removeEventListener("change", onChange);
+}
+
+function getMobileWorkspaceSnapshot() {
+  return window.matchMedia(MOBILE_WORKSPACE_QUERY).matches;
+}
+
+function getServerMobileWorkspaceSnapshot() {
+  // 首屏先按收起渲染，避免手机水合前展示打开的面板。
+  return true;
+}
 
 type Props = {
   design: Design;
@@ -50,6 +70,10 @@ type Props = {
     autoSave: boolean;
     onAutoSaveChange: (enabled: boolean) => void;
     canSave: boolean;
+    canUndo?: boolean;
+    canRedo?: boolean;
+    onUndo?: () => void;
+    onRedo?: () => void;
     onSave: () => void;
     onBack: (event: MouseEvent<HTMLAnchorElement>) => void;
     onChange: (design: Design) => void;
@@ -91,10 +115,21 @@ export function Workspace({ design, catalog, accessoryCatalog, project }: Props)
   const { resolvedTheme } = useTheme();
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [explodeAmount, setExplodeAmount] = useState(0);
-  const [panelOpen, setPanelOpen] = useState(true);
-  const [activeTab, setActiveTab] = useState("parts");
+  const [showDimensions, setShowDimensions] = useState(false);
+  const isMobile = useSyncExternalStore(subscribeMobileWorkspace, getMobileWorkspaceSnapshot, getServerMobileWorkspaceSnapshot);
+  const [mobilePanelOpen, setMobilePanelOpen] = useState(false);
+  const [desktopPanelOpen, setDesktopPanelOpen] = useState(true);
+  const panelOpen = isMobile ? mobilePanelOpen : desktopPanelOpen;
+  const [activeTab, setActiveTab] = useState<PanelTab>("parts");
   const [viewRequest, setViewRequest] = useState<ViewRequest>({ id: 0, action: "fit" });
+  const appShell = useRef<HTMLDivElement>(null);
   const sceneContainer = useRef<HTMLElement>(null);
+  const panelContent = useRef<HTMLDivElement>(null);
+  const panelTabs = useRef<HTMLDivElement>(null);
+  const panelGesture = useRef<{ id: number; x: number; y: number; moved: boolean; multi: boolean; open: boolean; invalid: boolean; touches: Set<number> } | null>(null);
+  const suppressPanelClick = useRef(false);
+  const fullscreenSelection = useRef(false);
+  const previousMobile = useRef(isMobile);
   const [fullscreenController] = useState(createFullscreenController);
   const setSceneContainer = useCallback((element: HTMLElement | null) => {
     sceneContainer.current = element;
@@ -107,6 +142,146 @@ export function Workspace({ design, catalog, accessoryCatalog, project }: Props)
   const [deletingState, setDeletingState] = useState<{ target: Part; epoch: number } | null>(null);
   const editing = editingState?.epoch === project.formEpoch ? editingState.target : null;
   const deleting = deletingState?.epoch === project.formEpoch ? deletingState.target : null;
+
+  const focusActiveTab = useCallback(() => {
+    panelTabs.current?.querySelector<HTMLButtonElement>('[role="tab"][aria-selected="true"]')?.focus({ preventScroll: true });
+  }, []);
+
+  const closePanel = useCallback((restoreFocus = false) => {
+    const focusedInContent = panelContent.current?.contains(document.activeElement) ?? false;
+    if (isMobile) setMobilePanelOpen(false);
+    else setDesktopPanelOpen(false);
+    if (restoreFocus || focusedInContent) focusActiveTab();
+  }, [focusActiveTab, isMobile]);
+
+  function openPanel() {
+    if (isMobile) setMobilePanelOpen(true);
+    else setDesktopPanelOpen(true);
+  }
+
+  function startPanelGesture(event: TouchEvent<HTMLDivElement>) {
+    if (!isMobile) return;
+    const touch = event.changedTouches[0];
+    if (!touch) return;
+    if (panelGesture.current) {
+      panelGesture.current.multi = true;
+      for (const item of Array.from(event.changedTouches)) panelGesture.current.touches.add(item.identifier);
+      return;
+    }
+    suppressPanelClick.current = false;
+    panelGesture.current = {
+      id: touch.identifier, x: touch.clientX, y: touch.clientY, moved: false,
+      multi: event.touches.length !== 1, open: panelOpen, invalid: false,
+      touches: new Set(Array.from(event.changedTouches, (item) => item.identifier)),
+    };
+  }
+
+  function movePanelGesture(event: TouchEvent<HTMLDivElement>) {
+    const gesture = panelGesture.current;
+    if (!gesture) return;
+    if (event.touches.length !== 1) gesture.multi = true;
+    const touch = Array.from(event.touches).find((item) => item.identifier === gesture.id);
+    if (touch && Math.hypot(touch.clientX - gesture.x, touch.clientY - gesture.y) > 10) gesture.moved = true;
+  }
+
+  function endPanelGesture(event: TouchEvent<HTMLDivElement>) {
+    const gesture = panelGesture.current;
+    if (!gesture) return;
+    const changed = Array.from(event.changedTouches).filter((item) => gesture.touches.has(item.identifier));
+    if (changed.length === 0) return;
+    const touch = changed.find((item) => item.identifier === gesture.id);
+    for (const item of changed) gesture.touches.delete(item.identifier);
+    if (gesture.multi) {
+      suppressPanelClick.current = true;
+      event.preventDefault();
+      if (gesture.touches.size === 0) panelGesture.current = null;
+      return;
+    }
+    panelGesture.current = null;
+    if (!touch) return;
+    const dx = touch.clientX - gesture.x;
+    const dy = touch.clientY - gesture.y;
+    if (gesture.invalid || gesture.moved || Math.hypot(dx, dy) > 10) {
+      suppressPanelClick.current = true;
+      event.preventDefault();
+    }
+    if (isMobile && !gesture.invalid && panelOpen === gesture.open && event.cancelable && event.nativeEvent.defaultPrevented
+      && Math.abs(dy) >= 40 && Math.abs(dy) > Math.abs(dx) * 1.2) {
+      if (dy < 0 && !panelOpen) openPanel();
+      if (dy > 0 && panelOpen) closePanel();
+    }
+  }
+
+  function cancelPanelGesture() {
+    panelGesture.current = null;
+    suppressPanelClick.current = false;
+  }
+
+  useEffect(() => {
+    if (!isMobile) return;
+    function onTouchStart(event: globalThis.TouchEvent) {
+      if (panelGesture.current && event.touches.length > 1) panelGesture.current.multi = true;
+    }
+    window.addEventListener("touchstart", onTouchStart, { capture: true, passive: true });
+    window.addEventListener("blur", cancelPanelGesture);
+    return () => {
+      window.removeEventListener("touchstart", onTouchStart, true);
+      window.removeEventListener("blur", cancelPanelGesture);
+    };
+  }, [isMobile]);
+
+  // 当从桌面切回收起的手机抽屉时，不能让焦点留在隐藏表单中。
+  useLayoutEffect(() => {
+    if (previousMobile.current !== isMobile && !panelOpen && panelContent.current?.contains(document.activeElement)) {
+      focusActiveTab();
+    }
+    if (previousMobile.current !== isMobile && panelGesture.current) panelGesture.current.invalid = true;
+    previousMobile.current = isMobile;
+  }, [focusActiveTab, isMobile, panelOpen]);
+
+  useEffect(() => {
+    if (!isMobile || !panelOpen || !window.visualViewport) return;
+    const viewport = window.visualViewport;
+    const shell = appShell.current;
+    if (!shell) return;
+    function syncViewport() {
+      // 仅输入控件获得焦点时将视觉视口变化视为软键盘，避免浏览器工具栏缩放画布。
+      const focused = document.activeElement;
+      const editingText = focused instanceof HTMLElement && (
+        focused.tagName === "TEXTAREA" || focused.isContentEditable || (focused instanceof HTMLInputElement
+          && !["button", "checkbox", "color", "file", "hidden", "radio", "range", "reset", "submit"].includes(focused.type))
+      );
+      const scale = viewport.scale || 1;
+      const keyboardOffset = editingText && scale === 1
+        ? Math.max(0, window.innerHeight - viewport.height - viewport.offsetTop) : 0;
+      shell?.style.setProperty("--workspace-keyboard-offset", `${keyboardOffset}px`);
+    }
+    syncViewport();
+    viewport.addEventListener("resize", syncViewport);
+    viewport.addEventListener("scroll", syncViewport);
+    document.addEventListener("focusin", syncViewport);
+    document.addEventListener("focusout", syncViewport);
+    return () => {
+      viewport.removeEventListener("resize", syncViewport);
+      viewport.removeEventListener("scroll", syncViewport);
+      document.removeEventListener("focusin", syncViewport);
+      document.removeEventListener("focusout", syncViewport);
+      shell.style.removeProperty("--workspace-keyboard-offset");
+    };
+  }, [isMobile, panelOpen]);
+
+  useEffect(() => {
+    if (!isMobile || !panelOpen || fullscreen) return;
+    function onKeyDown(event: KeyboardEvent) {
+      // 弹出层、全屏与输入法优先处理 Esc；抽屉本身不是模态窗口。
+      if (event.key !== "Escape" || event.defaultPrevented || event.isComposing || document.fullscreenElement
+        || document.querySelector('[data-slot="dialog-content"]:not([hidden]), [role="listbox"]:not([hidden]), [role="menu"]:not([hidden])')) return;
+      event.preventDefault();
+      closePanel(true);
+    }
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [closePanel, fullscreen, isMobile, panelOpen]);
 
   function setEditing(target: Part | "new" | null) {
     setEditingState(target === null ? null : { target, epoch: project.formEpoch });
@@ -121,22 +296,40 @@ export function Workspace({ design, catalog, accessoryCatalog, project }: Props)
     [design.parts, explodeAmount],
   );
   const selectedPart = design.parts.find((p) => p.id === selectedId) ?? null;
+  const sceneSelectedId = selectedPart?.id ?? null;
 
   function selectPart(id: string) {
     if (editing) return; // 编辑期间锁住目标，3D 点击不能丢弃表单输入。
     setSelectedId(id || null);
     if (id) {
       setActiveTab("parts");
-      setPanelOpen(true);
+      if (fullscreen) fullscreenSelection.current = true;
+      openPanel();
     }
   }
 
+  // 全屏只包含场景；零件选择需要等退出全屏后才能看到面板。
+  useEffect(() => fullscreenController.subscribe(() => {
+    if (fullscreenController.getSnapshot().fullscreen || !fullscreenSelection.current) return;
+    fullscreenSelection.current = false;
+    if (getMobileWorkspaceSnapshot()) setMobilePanelOpen(true);
+    else setDesktopPanelOpen(true);
+  }), [fullscreenController]);
+
+  function activateCurrentTab(tab: PanelTab) {
+    if (tab !== activeTab) return; // 其他标签由 Tabs 的 onValueChange 处理。
+    if (!panelOpen) openPanel();
+    else if (isMobile) closePanel();
+  }
+
   return (
-    <div className="app-shell flex h-dvh min-w-0 flex-col overflow-hidden">
-      <Header design={design} onBack={project.onBack} />
-      <ProjectToolbar id={design.id} status={project.status} savedAt={project.savedAt} saving={project.saving} canSave={project.canSave}
-        autoSave={project.autoSave} onAutoSaveChange={project.onAutoSaveChange} readOnly={project.readOnly} pending={project.pending}
-        invalid={project.invalid} saveBlocked={project.saveBlocked} onSave={project.onSave} onExport={project.onExport} onCopy={project.onCopy} onRefresh={project.onRefresh} />
+    <div ref={appShell} className="app-shell flex h-dvh min-w-0 flex-col overflow-hidden">
+      <Header design={design} onBack={project.onBack} projectActions={
+        <ProjectToolbar id={design.id} status={project.status} savedAt={project.savedAt} saving={project.saving} canSave={project.canSave}
+          canUndo={project.canUndo} canRedo={project.canRedo} onUndo={project.onUndo} onRedo={project.onRedo}
+          dirty={project.dirty} autoSave={project.autoSave} onAutoSaveChange={project.onAutoSaveChange} readOnly={project.readOnly} pending={project.pending}
+          invalid={project.invalid} saveBlocked={project.saveBlocked} onSave={project.onSave} onExport={project.onExport} onCopy={project.onCopy} onRefresh={project.onRefresh} />
+      } />
       <div className="max-h-[24dvh] shrink-0 overflow-y-auto">{project.messages}</div>
       <main className="workspace-main" data-panel-open={panelOpen}>
         <section ref={setSceneContainer} className="workspace-scene" aria-label="3D 构建区">
@@ -144,37 +337,45 @@ export function Workspace({ design, catalog, accessoryCatalog, project }: Props)
             <Scene
               design={design}
               catalog={catalog}
-              selectedId={selectedId}
+              selectedId={sceneSelectedId}
               explodeAmount={explodeAmount}
               offsets={offsets}
               viewRequest={viewRequest}
               showGrid
+              showDimensions={showDimensions}
               dark={resolvedTheme === "dark"}
               onSelect={selectPart}
             />
-            <div role="img" aria-label="世界坐标方向指示：X 向右、Y 向上、Z 朝正面" className="absolute right-2 top-2 size-28" />
+            <div role="img" aria-label="世界坐标方向指示：X 向右、Y 向上、Z 朝正面" className="pointer-events-none absolute right-2 top-2 size-28" />
             <div className="scene-coordinate-label pointer-events-none absolute right-3 top-28 rounded-md border border-border/70 bg-background/80 px-2 py-1 text-xs leading-4 text-muted-foreground">
               <span className="axis-x font-mono">X</span> 右 · <span className="axis-y font-mono">Y</span> 上 · <span className="axis-z font-mono">Z</span> 正面
             </div>
-            {design.parts.length === 0 && <div className="absolute inset-0 grid place-content-center gap-3 bg-background/70 p-4 text-center"><h2 className="text-base font-medium">从第一个零件开始</h2><p className="max-w-xs text-sm leading-relaxed text-muted-foreground">添加型材、板材或其他构件，或到项目面板粘贴设计 JSON。</p><Button size="touch" className="mx-auto" disabled={project.readOnly || project.invalid || Boolean(editing)} onClick={() => { setEditing("new"); setActiveTab("parts"); setPanelOpen(true); }}><Plus className="size-4" />添加零件</Button></div>}
-            <p className="scene-hint pointer-events-none absolute bottom-3 left-3 right-3 text-center text-xs leading-5 text-muted-foreground">
-              {editing ? "正在编辑零件 · 应用或取消后可重新选择" : <><span className="scene-hint-mouse">左键旋转 · 滚轮缩放 · 右键平移 · 点击选中</span>
-              <span className="scene-hint-touch">单指旋转 · 双指缩放 / 平移 · 轻点选中</span></>}
-            </p>
+            {design.parts.length === 0 && <div className="absolute inset-0 grid place-content-center gap-3 bg-background/70 p-4 text-center"><h2 className="text-base font-medium">从第一个零件开始</h2><p className="max-w-xs text-sm leading-relaxed text-muted-foreground">添加型材、板材或其他构件，或到项目面板粘贴设计 JSON。</p><Button size="touch" className="mx-auto" disabled={project.readOnly || project.invalid || Boolean(editing)} onClick={() => { setEditing("new"); setActiveTab("parts"); openPanel(); }}><Plus className="size-4" />添加零件</Button></div>}
+            {editing && <p className="scene-editing-hint pointer-events-none absolute left-3 right-3 top-3 text-center text-xs leading-5 text-muted-foreground">正在编辑零件 · 应用或取消后可重新选择</p>}
           </div>
           <SceneToolbar amount={explodeAmount} empty={design.parts.length === 0} onAmountChange={setExplodeAmount}
+            showDimensions={showDimensions} onShowDimensionsChange={setShowDimensions}
             onView={(action) => setViewRequest((current) => ({ id: current.id + 1, action }))}
             fullscreen={fullscreen} fullscreenSupported={fullscreenSupported} fullscreenBusy={fullscreenBusy} fullscreenContainer={sceneContainer}
             error={fullscreenError} onFullscreen={() => { void fullscreenController.toggle(); }} />
         </section>
 
         <aside className="workspace-panel" aria-label="设计面板">
-          <Tabs value={activeTab} onValueChange={(value) => { setActiveTab(String(value)); setPanelOpen(true); }} className="flex min-h-0 min-w-0 flex-1 flex-col gap-0">
-            <div className="panel-toolbar flex shrink-0 items-center gap-1 p-2">
+          <Tabs value={activeTab} onValueChange={(value) => { setActiveTab(value as PanelTab); openPanel(); }} className="flex min-h-0 min-w-0 flex-1 flex-col gap-0">
+            <div ref={panelTabs} className="panel-toolbar flex shrink-0 items-center gap-1 p-2"
+              onTouchStart={startPanelGesture} onTouchMove={movePanelGesture} onTouchEnd={endPanelGesture} onTouchCancel={cancelPanelGesture}
+              onClickCapture={(event) => {
+                if (suppressPanelClick.current && event.detail !== 0 && typeof PointerEvent !== "undefined" && event.nativeEvent instanceof PointerEvent && event.nativeEvent.pointerType === "touch") {
+                  suppressPanelClick.current = false;
+                  event.preventDefault();
+                  event.stopPropagation();
+                }
+              }}
+            >
               <TabsList variant="line" className="panel-tab-list min-w-0 flex-1">
-                <TabsTrigger value="parts">零件</TabsTrigger>
-                <TabsTrigger value="bom">算料</TabsTrigger>
-                <TabsTrigger value="project">项目</TabsTrigger>
+                <TabsTrigger value="parts" aria-expanded={panelOpen && activeTab === "parts"} onClick={() => activateCurrentTab("parts")}>零件</TabsTrigger>
+                <TabsTrigger value="bom" aria-expanded={panelOpen && activeTab === "bom"} onClick={() => activateCurrentTab("bom")}>算料</TabsTrigger>
+                <TabsTrigger value="project" aria-expanded={panelOpen && activeTab === "project"} onClick={() => activateCurrentTab("project")}>项目</TabsTrigger>
               </TabsList>
               <Button
                 variant="ghost"
@@ -183,12 +384,12 @@ export function Workspace({ design, catalog, accessoryCatalog, project }: Props)
                 aria-expanded={panelOpen}
                 aria-controls="workspace-panel-content"
                 title={panelOpen ? "收起面板" : "展开面板"}
-                onClick={() => setPanelOpen((open) => !open)}
+                onClick={() => { if (panelOpen) closePanel(); else openPanel(); }}
               >
                 {panelOpen ? <ChevronDown className="panel-toggle-icon size-4" /> : <ChevronUp className="panel-toggle-icon size-4" />}
               </Button>
             </div>
-            <div id="workspace-panel-content" hidden={!panelOpen} className="min-h-0 min-w-0 flex-1">
+            <div ref={panelContent} id="workspace-panel-content" hidden={!panelOpen} className="min-h-0 min-w-0 flex-1">
               <TabsContent value="parts" keepMounted hidden={activeTab !== "parts"} className="h-full min-h-0 overflow-hidden">
                 {editing ? <PartEditor
                   key={`${project.formEpoch}-${editing === "new" ? "new" : editing.id}`}
@@ -204,17 +405,29 @@ export function Workspace({ design, catalog, accessoryCatalog, project }: Props)
                     setEditing(null);
                     setSelectedId(part.id);
                   }}
-                /> : <PartsList design={design} selectedId={selectedId} onSelect={selectPart}>
+                /> : <PartsList design={design} selectedId={sceneSelectedId} onSelect={selectPart} issues={project.issues}>
                   <div className="mb-3"><Button size="touch" variant="outline" className="w-full" disabled={project.readOnly || project.invalid} onClick={() => setEditing("new")}><Plus className="size-4" />添加零件</Button></div>
                   {selectedPart && <>
                     <PartDetails part={selectedPart} onClear={() => setSelectedId(null)} />
-                    <div className="mb-3 flex min-w-0 gap-2">
+                    <div className="mb-3 flex min-w-0 flex-wrap gap-2">
                       <Button size="touch" variant="outline" disabled={project.readOnly || project.invalid} onClick={() => setEditing(selectedPart)}><Pencil className="size-4" />编辑</Button>
                       <Button size="touch" variant="ghost" disabled={project.readOnly || project.invalid} onClick={() => {
                         const part = { ...selectedPart, id: nextPartId(design.parts.map((item) => item.id), selectedPart.id) };
                         project.onChange({ ...design, parts: [...design.parts, part] });
                         setSelectedId(part.id);
                       }}><Copy className="size-4" />复制</Button>
+                      {(["x", "z"] as const satisfies readonly MirrorAxis[]).filter((axis) => selectedPart.position[axis === "x" ? 0 : 2] !== 0).map((axis) => (
+                        <Button key={axis} size="touch" variant="ghost" disabled={project.readOnly || project.invalid}
+                          title={axis === "x" ? "沿 X 轴生成左右对称零件" : "沿 Z 轴生成前后对称零件"}
+                          onClick={() => {
+                            const part = mirrorPart(selectedPart, design.parts.map((item) => item.id), axis);
+                            project.onChange({ ...design, parts: [...design.parts, part] });
+                            setSelectedId(part.id);
+                          }}
+                        >
+                          <FlipHorizontal2 className="size-4" />{axis === "x" ? "左右镜像" : "前后镜像"}
+                        </Button>
+                      ))}
                       <Button size="icon-touch" variant="ghost" aria-label="删除选中零件" title="删除选中零件" disabled={project.readOnly || project.invalid} onClick={() => setDeleting(selectedPart)}><Trash2 className="size-4" /></Button>
                     </div>
                   </>}
@@ -227,7 +440,7 @@ export function Workspace({ design, catalog, accessoryCatalog, project }: Props)
                 <div className="min-h-0 flex-1"><ProjectPanel design={design} catalog={catalog} accessories={accessoryCatalog} onChange={project.onChange}
                   readOnly={project.readOnly} autoSave={project.autoSave} saveBlocked={project.saveBlocked} jsonInvalid={project.invalid} jsonText={project.text} onJsonChange={project.onJsonChange}
                   issues={project.issues} onArchive={project.onArchive}
-                  onDiscard={project.onDiscard} dirty={project.dirty} pending={project.pending} formEpoch={project.formEpoch} onPendingChange={project.onPendingChange} /></div>
+                  onDiscard={project.onDiscard} dirty={project.dirty} pending={project.pending} formEpoch={project.formEpoch} onPendingChange={project.onPendingChange} onSelectPart={selectPart} /></div>
               </TabsContent>
             </div>
           </Tabs>

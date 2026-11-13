@@ -53,6 +53,7 @@ export type ProjectPanelProps = {
   pending: boolean;
   formEpoch: number;
   onPendingChange: (form: PendingProjectForm, pending: boolean) => void;
+  onSelectPart?: (id: string) => void;
   jsonInvalid?: boolean;
 };
 
@@ -369,6 +370,7 @@ export function ProjectPanel({
   pending,
   formEpoch,
   onPendingChange,
+  onSelectPart,
   jsonInvalid = false,
 }: ProjectPanelProps) {
   const prefix = useId();
@@ -381,7 +383,8 @@ export function ProjectPanel({
           <div className="space-y-1">
             <h2 id={`${prefix}-heading`} className="text-sm font-semibold">项目设置</h2>
             <p className="text-xs leading-5 text-muted-foreground">
-              {readOnly ? "当前项目只读。可导出 JSON；另存副本需要写入权限。" : pending ? unappliedFieldsWarning : autoSave ? "自动保存开启：应用后的有效草稿停止编辑 1.5 秒后保存到服务端文件；未应用输入不会保存。" : "自动保存关闭：表单应用后更新草稿，需在项目工具栏手动保存。"}
+              {pending && <>{unappliedFieldsWarning} </>}
+              {readOnly ? "当前暂不可编辑，请查看页面中的状态提示。" : autoSave ? "应用后的有效草稿停止编辑 1.5 秒后自动保存；未应用输入不会保存。" : "应用后更新草稿，需手动保存。"}
             </p>
           </div>
           <dl className="grid min-w-0 grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-1.5 rounded-lg border border-border bg-card p-3 text-xs leading-5">
@@ -409,7 +412,21 @@ export function ProjectPanel({
                     <span className="mr-1 font-medium">{issue.level === "error" ? "错误" : "警告"}</span>{issue.message}
                   </p>
                   <p className="min-w-0 text-xs leading-5 text-muted-foreground wrap-anywhere">
-                    路径：<code className="select-text">{issue.path || "项目根节点"}</code>{issue.partId ? ` · 零件 ${issue.partId}` : ""}
+                    路径：<code className="select-text">{issue.path || "项目根节点"}</code>
+                    {issue.partId ? (
+                      onSelectPart ? (
+                        <>
+                          {" · "}
+                          <button
+                            type="button"
+                            className="font-mono underline underline-offset-2 hover:text-foreground"
+                            onClick={() => onSelectPart(issue.partId!)}
+                          >
+                            定位零件 {issue.partId}
+                          </button>
+                        </>
+                      ) : ` · 零件 ${issue.partId}`
+                    ) : ""}
                   </p>
                 </li>
               ))}
@@ -422,7 +439,7 @@ export function ProjectPanel({
             <ChevronDownIcon className="size-4 shrink-0 transition-transform group-open:rotate-180" aria-hidden="true" />
           </summary>
           <div className="min-w-0 space-y-3 border-t border-border p-3">
-            <FormField id={`${prefix}-json`} label="项目 JSON" hint={readOnly ? "只读内容仍可选择和复制。" : pending ? `${unappliedFieldsWarning}高级 JSON 编辑已暂停，以免覆盖表单输入。` : autoSave ? "原文立即进入草稿；有效且静止 1.5 秒后自动保存，无效原文不会写入文件。" : "原文立即进入草稿，允许暂时不完整；有效后需手动保存。"}>
+            <FormField id={`${prefix}-json`} label="项目 JSON" hint={`${pending ? `${unappliedFieldsWarning}高级 JSON 编辑已暂停。` : ""}${readOnly ? "当前暂不可编辑，仍可选择和复制原文。" : pending ? "" : autoSave ? "原文进入草稿；有效且静止 1.5 秒后自动保存。" : "原文进入草稿，有效后需手动保存。"}`}>
               <Textarea
                 id={`${prefix}-json`}
                 className="min-h-64 select-text whitespace-pre-wrap break-all font-mono"
@@ -449,7 +466,7 @@ export function ProjectPanel({
               <RotateCcwIcon className="size-4" aria-hidden="true" />放弃未保存修改
             </Button>
           </div>
-          <p className="text-xs leading-5 text-muted-foreground">归档可恢复，不是删除。“放弃”仅恢复上次成功保存的文件，不撤销已自动保存的修改。导出、另存副本和文件更新在项目工具栏的「⋯」中。</p>
+          <p className="text-xs leading-5 text-muted-foreground">归档可恢复，不是删除。“放弃”仅恢复上次成功保存的文件，不撤销已自动保存的修改。导出、另存副本和文件更新在顶部「项目操作」中。</p>
         </section>
       </div>
     </ScrollArea>

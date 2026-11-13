@@ -300,11 +300,11 @@ test("全屏按钮区分浏览器真实状态、切换中和不支持，不把�
   assert.match(exit, /title="退出全屏 · Esc"/);
 });
 
-test("全屏错误通过 alert 显示，分离程度和视角入口不随全屏丢失", () => {
+test("全屏错误通过 alert 显示，拆解按钮和视角入口不随全屏丢失", () => {
   for (const fullscreen of [false, true]) {
     const markup = renderToolbar({ fullscreen, error: "浏览器未能切换全屏。可继续使用当前画布，或检查浏览器的全屏权限。" });
     assert.match(markup, /role="alert"[^>]*>浏览器未能切换全屏/);
-    assert.match(markup, /aria-label="分离程度 42%"/);
+    assert.match(markup, /aria-label="拆解"|aria-label="恢复装配"|aria-label="当前分离 \d+%"/);
     assert.match(markup, /aria-label="适应视图"/);
     assert.match(markup, /aria-label="坐标与拆解说明"/);
   }
@@ -343,7 +343,10 @@ test("全屏目标包含同一 Scene 和工具栏，切换不条件挂载或更�
   assert.deepEqual(scenes.map((node) => node.tagName.getText()), ["Scene", "SceneToolbar"]);
   const scene = scenes[0];
   assert.equal(attribute(scene, "key"), undefined);
-  for (const name of ["selectedId", "explodeAmount", "viewRequest"]) {
+  // 失效选中 ID 不应传入场景，否则撤销新增零件后会把所有剩余零件淡化。
+  assert.match(source.getFullText(), /const sceneSelectedId = selectedPart\?\.id \?\? null/);
+  assert.equal(attribute(scene, "selectedId")?.initializer?.getText(), "{sceneSelectedId}");
+  for (const name of ["explodeAmount", "viewRequest"]) {
     assert.equal(attribute(scene, name)?.initializer?.getText(), `{${name}}`);
   }
   const toolbar = scenes[1];

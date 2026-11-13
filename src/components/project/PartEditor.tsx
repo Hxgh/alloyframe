@@ -181,7 +181,7 @@ function PartEditorForm({
         <div className="space-y-1">
           <h2 className="text-sm font-semibold">{readOnly ? "零件详情" : part ? "编辑零件" : "新建零件"}</h2>
           <p className="text-xs leading-5 text-muted-foreground">
-            {readOnly ? "当前项目只读，不能修改零件。" : "应用后更新当前项目草稿；有效草稿按自动保存设置写入文件，也可手动保存。"}
+            {readOnly ? "零件暂不可编辑，请查看页面中的状态提示。" : "应用后更新项目草稿，按自动保存设置或手动保存写入文件。"}
           </p>
         </div>
         {changed && <p role="status" className="text-xs leading-5 text-destructive">{unappliedFieldsWarning}</p>}

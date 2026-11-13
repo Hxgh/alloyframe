@@ -1,4 +1,4 @@
-import type { PerspectiveCamera, Vector3 } from "three";
+import { Vector3, type PerspectiveCamera } from "three";
 
 export type Vec3 = [number, number, number];
 export type SceneBounds = {
@@ -16,6 +16,43 @@ export function combineBounds(a: SceneBounds, b: SceneBounds): SceneBounds {
     max,
     center: min.map((value, i) => (value + max[i]) / 2) as Vec3,
     radius: Math.max(200, Math.hypot(...max.map((value, i) => value - min[i])) / 2),
+  };
+}
+
+/** 取景使用真实包围半径；空项目保留默认视距，极小模型保留数值安全余量。 */
+export function cameraBounds(bounds: SceneBounds, empty = false): SceneBounds {
+  if (empty) return bounds;
+  const radius = Math.hypot(...bounds.max.map((value, i) => value - bounds.min[i])) / 2;
+  return { ...bounds, radius: Math.max(1, radius) };
+}
+
+/** 标尺开启时，取景同时涵盖尺寸线和文字位置，避免小模型的标注被裁掉。 */
+export function boundsWithGuides(
+  bounds: SceneBounds,
+  guides: ReadonlyArray<{ start: Vec3; end: Vec3; anchorA: Vec3; anchorB: Vec3; labelPosition: Vec3; label: string; badgeHeight: number }>,
+): SceneBounds {
+  if (guides.length === 0) return bounds;
+  const min = [...bounds.min] as Vec3;
+  const max = [...bounds.max] as Vec3;
+  const include = (point: Vec3, padding = 0) => {
+    for (let i = 0; i < 3; i++) {
+      min[i] = Math.min(min[i], point[i] - padding);
+      max[i] = Math.max(max[i], point[i] + padding);
+    }
+  };
+  for (const guide of guides) {
+    for (const point of [guide.start, guide.end, guide.anchorA, guide.anchorB]) include(point);
+    const lines = guide.label.split("\n");
+    const height = guide.badgeHeight;
+    // 兼容中文全角及画布左右留白，保守包住始终面向相机的标牌。
+    const width = height * (Math.max(...lines.map((line) => line.length)) * 1.2 + 2) / (1.25 * lines.length + 0.85);
+    include(guide.labelPosition, Math.hypot(width, height) / 2);
+  }
+  return {
+    min,
+    max,
+    center: min.map((value, i) => (value + max[i]) / 2) as Vec3,
+    radius: Math.max(1, Math.hypot(...max.map((value, i) => value - min[i])) / 2),
   };
 }
 
@@ -67,6 +104,42 @@ export function frameView(
     near: bounds.radius * 0.02,
     far: Math.max(bounds.radius * 40, maxDistance + targetOffset + bounds.radius * 2),
   };
+}
+
+/** 保留当前观察目标和方向，判断包围盒是否在相机视锥内；必要时只沿视线后退。 */
+export function visibleBoundsDistance(
+  bounds: SceneBounds,
+  camera: PerspectiveCamera,
+  target: Vec3,
+  aspect: number,
+  near = camera.near,
+  padding = 1,
+): number {
+  const forward = new Vector3(...target).sub(camera.position).normalize();
+  if (forward.lengthSq() === 0) return 0;
+  const right = new Vector3().crossVectors(forward, camera.up).normalize();
+  if (right.lengthSq() === 0) right.set(1, 0, 0);
+  const up = new Vector3().crossVectors(right, forward).normalize();
+  const vertical = Math.tan(camera.getEffectiveFOV() * Math.PI / 360);
+  const horizontal = vertical * Math.max(aspect, 0.01);
+  const origin = new Vector3(...target);
+  let extra = 0;
+  for (const x of [bounds.min[0], bounds.max[0]]) {
+    for (const y of [bounds.min[1], bounds.max[1]]) {
+      for (const z of [bounds.min[2], bounds.max[2]]) {
+        const point = new Vector3(x, y, z).sub(camera.position);
+        const depth = point.dot(forward);
+        extra = Math.max(extra,
+          Math.abs(point.dot(right)) * padding / horizontal - depth,
+          Math.abs(point.dot(up)) * padding / vertical - depth,
+          near - depth,
+        );
+      }
+    }
+  }
+  if (extra <= 1e-7) return 0;
+  // 只留极小余量，避免刚好落在裁剪边界受浮点误差影响。
+  return extra + Math.max(bounds.radius * 0.001, origin.distanceTo(camera.position) * 1e-6);
 }
 
 export type ViewState = { bounds: SceneBounds; requestId: number; distance: number };

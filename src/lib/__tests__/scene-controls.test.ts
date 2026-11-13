@@ -153,6 +153,35 @@ test("世界视角清理惯性，顶视稳定且后续仍能拖动旋转", () =>
   }
 });
 
+test("平移缩放后重复适应视图重新居中，保持方向且不会改变默认视角", () => {
+  const { bounds, camera, controls, element } = fixture();
+  try {
+    const initial = frameView(bounds, camera.fov, camera.aspect);
+    drag(element, 2);
+    settle(controls);
+    input(element, "wheel", { deltaY: -100, deltaMode: 0 });
+    settle(controls);
+    assert.ok(controls.target.distanceTo(new Vector3(...bounds.center)) > 1);
+    assert.ok(Math.abs(camera.position.distanceTo(controls.target) - initial.fitDistance) > 1);
+
+    const direction = camera.position.clone().sub(controls.target).normalize();
+    let view = { position: camera.position.toArray() as Vec3, target: controls.target.toArray() as Vec3 };
+    let previous = { bounds, requestId: 0, distance: initial.fitDistance };
+    for (const id of [1, 2]) {
+      const frame = frameRequest(bounds, camera.fov, camera.aspect, { id, action: "fit" }, view, previous);
+      applyViewFrame(camera, controls, frame);
+      settle(controls);
+      assert.ok(controls.target.distanceTo(new Vector3(...bounds.center)) < 1e-7);
+      assert.ok(Math.abs(camera.position.distanceTo(controls.target) - frame.fitDistance) < 1e-7);
+      assert.ok(camera.position.clone().sub(controls.target).normalize().distanceTo(direction) < 1e-8);
+      view = { position: camera.position.toArray() as Vec3, target: controls.target.toArray() as Vec3 };
+      previous = { bounds, requestId: id, distance: frame.fitDistance };
+    }
+  } finally {
+    controls.dispose();
+  }
+});
+
 test("惯性中适应视图后不再漂移；尺寸变化保留用户平移和缩放", () => {
   const { bounds, camera, controls, element } = fixture();
   try {

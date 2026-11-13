@@ -53,18 +53,20 @@ test("标准按钮、输入、选择与标签页使用同一控件高度，触�
   const icon = renderToStaticMarkup(createElement(Button, { size: "icon-touch", "aria-label": "全屏" }));
   assert.match(slot(icon, "button"), /size-\[var\(--control-icon-size\)\]/);
   assert.match(css, /:root\s*\{\s*--control-height: 2\.25rem;\s*--control-icon-size: 2\.25rem;/);
-  assert.match(css, /@media \(pointer: coarse\), \(max-width: 639px\)\s*\{\s*:root\s*\{\s*--control-height: 2\.75rem;\s*--control-icon-size: 2\.75rem;/);
+  assert.match(css, /@media \(pointer: coarse\), \(max-width: 639px\), \(max-width: 1023px\) and \(max-height: 540px\) and \(orientation: landscape\)\s*\{\s*:root\s*\{\s*--control-height: 2\.75rem;\s*--control-icon-size: 2\.75rem;/);
   assert.match(css, /\[data-slot="input"\],\s*\[data-slot="textarea"\],[^{]+\{\s*font-size: 1rem;/);
 });
 
-test("3D 优先布局保留有界侧栏、竖屏 2:1 和折叠入口，工具按自身宽度适配", async () => {
+test("3D 优先布局保留桌面侧栏和手机抽屉入口，工具按自身宽度适配", async () => {
   assert.match(css, /--workspace-panel-width: clamp\(17\.5rem, 24vw, 19\.5rem\);/);
-  assert.match(css, /grid-template-rows: minmax\(0, 2fr\) minmax\(0, 1fr\);/);
-  assert.match(css, /\(min-width: 560px\) and \(max-height: 540px\) and \(orientation: landscape\)/);
+  assert.match(css, /@media \(min-width: 1024px\)/);
+  assert.match(css, /@media \(max-width: 639px\), \(max-width: 1023px\) and \(max-height: 540px\) and \(orientation: landscape\)/);
   assert.match(css, /grid-template-columns: minmax\(0, 1fr\) var\(--workspace-panel-width\);/);
   assert.match(css, /grid-template-columns: minmax\(0, 1fr\) calc\(var\(--control-icon-size\) \+ 1rem\);/);
-  assert.match(css, /\.scene-tools\s*\{\s*container-type: inline-size;\s*container-name: scene-tools;/);
-  assert.match(css, /@container scene-tools \(min-width: 32rem\)\s*\{\s*\.scene-extended-control\s*\{\s*display: inline-flex;/);
+  assert.match(css, /\.workspace-scene\s*\{\s*position: relative;\s*container-type: inline-size;\s*container-name: scene;/);
+  assert.match(css, /\.scene-tools\s*\{[^}]*width: min\(100% - 1\.25rem, 32rem\);/);
+  assert.match(css, /@container scene \(min-width: 34rem\)\s*\{\s*\.scene-extended-control\s*\{\s*display: inline-flex;/);
+  assert.match(css, /\.workspace-scene,\s*\.workspace-panel\s*\{\s*display: flex;\s*flex-direction: column;\s*min-width: 0;\s*min-height: 0;\s*overflow: hidden;/);
   const workspace = await readFile(new URL("../../components/Workspace.tsx", import.meta.url), "utf8");
   assert.match(workspace, /<TabsList variant="line"/);
   assert.doesNotMatch(workspace, /min-h-11|h-\[50px\]/);
@@ -73,8 +75,7 @@ test("3D 优先布局保留有界侧栏、竖屏 2:1 和折叠入口，工具按
   assert.doesNotMatch(toolbar, /hidden sm:inline-flex/);
   assert.match(toolbar, /setDialog\("views"\)/);
   assert.match(toolbar, /setDialog\("help"\)/);
-  assert.match(toolbar, /aria-label="视角"/);
-  assert.match(css, /\.scene-primary-action\s*\{\s*width: var\(--control-icon-size\);\s*padding-inline: 0;/);
+  assert.match(toolbar, /label="视角"/);
 });
 
 test("材料色块同时输出深浅色，主题不改变首屏标记、零件顺序或设计数据", () => {
@@ -109,6 +110,9 @@ test("缩紧材料面板仍完整展示算料，区分草稿、已保存与无�
   assert.ok(markup.includes(bom.totalMassKg.toFixed(1)));
   assert.ok(markup.includes(`¥${bom.knownTotal.toFixed(0)}`));
   assert.match(markup, /估算 · 非报价/);
+  assert.match(markup, /估算重量/);
+  assert.match(markup, /重量不含配件，部分零件按尺寸估算/);
+  assert.doesNotMatch(markup, /无公开价格/);
   for (const line of bom.lines) {
     assert.ok(markup.includes(line.label));
     assert.ok(markup.includes(line.spec));
@@ -116,6 +120,10 @@ test("缩紧材料面板仍完整展示算料，区分草稿、已保存与无�
   }
   assert.match(markup, /font-mono text-sm leading-5 text-muted-foreground wrap-anywhere/);
   assert.match(render(true), />未保存草稿<\/span>/);
+  const unpriced = DesignSchema.parse({ ...design, parts: design.parts.filter((part) => part.kind !== "beam"), accessories: [] });
+  const unpricedMarkup = renderToStaticMarkup(createElement(BomPanel, { design: unpriced, catalog, accessories }));
+  assert.match(unpricedMarkup, /暂无估价/);
+  assert.match(unpricedMarkup, /未设置价格的项目未计入合计/);
   const invalid = render(true, true);
   assert.match(invalid, /算料和 CSV 导出已暂停/);
   assert.doesNotMatch(invalid, /data-slot="button"/);

@@ -160,48 +160,51 @@
   overflow: hidden;
 }
 
+.workspace-scene {
+  position: relative;
+  container-type: inline-size;
+  container-name: scene;
+}
+
 .workspace-panel {
   border-top: 1px solid var(--border);
   background: var(--background);
 }
 
 .scene-tools {
-  container-type: inline-size;
-  container-name: scene-tools;
+  position: absolute;
+  bottom: 0.625rem;
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(100% - 1.25rem, 32rem);
   display: flex;
   flex-direction: column;
   flex-shrink: 0;
   gap: 0.5rem;
-  padding: 0.375rem 0.75rem;
+  padding: 0.375rem 0.25rem;
+  border: 1px solid var(--border);
+  border-radius: 0.75rem;
+  background: oklch(from var(--background) l c h / 88%);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  box-shadow: 0 4px 16px rgb(0 0 0 / 0.12), 0 1px 3px rgb(0 0 0 / 0.05);
+  max-height: calc(100% - 1.25rem);
+  overflow-y: auto;
+  z-index: 5;
 }
 
-.scene-extended-control,
-.scene-separation-value,
-.scene-action-label {
+.scene-extended-control {
   display: none;
 }
 
-.scene-primary-action {
-  width: var(--control-icon-size);
-  padding-inline: 0;
-}
-
-@container scene-tools (min-width: 22rem) {
-  .scene-separation-value,
-  .scene-action-label {
-    display: inline;
-  }
-
-  .scene-primary-action {
-    width: auto;
-    padding-inline: 0.5rem;
-  }
-}
-
-@container scene-tools (min-width: 32rem) {
+@container scene (min-width: 34rem) {
   .scene-extended-control {
     display: inline-flex;
   }
+}
+
+.workspace-scene:fullscreen .scene-tools {
+  bottom: calc(0.75rem + env(safe-area-inset-bottom));
 }
 
 .workspace-scene:fullscreen {
@@ -247,16 +250,9 @@
     display: none;
   }
 
-  .scene-hint {
-    bottom: 0.25rem;
-  }
 }
 
-.scene-hint-touch {
-  display: none;
-}
-
-@media (pointer: coarse), (max-width: 639px) {
+@media (pointer: coarse), (max-width: 639px), (max-width: 1023px) and (max-height: 540px) and (orientation: landscape) {
   :root {
     --control-height: 2.75rem;
     --control-icon-size: 2.75rem;
@@ -266,16 +262,6 @@
   [data-slot="textarea"],
   .workspace-panel select {
     font-size: 1rem;
-  }
-}
-
-@media (pointer: coarse) {
-  .scene-hint-mouse {
-    display: none;
-  }
-
-  .scene-hint-touch {
-    display: inline;
   }
 }
 
@@ -318,8 +304,8 @@
   touch-action: pan-y;
 }
 
-/* 手机横屏采用侧栏，避免上下分区耗尽本就有限的高度。 */
-@media (min-width: 1024px), (min-width: 560px) and (max-height: 540px) and (orientation: landscape) {
+/* 桌面保留侧栏；手机横屏与竖屏均使用下方的覆盖式抽屉。 */
+@media (min-width: 1024px) {
   .workspace-main {
     grid-template-rows: minmax(0, 1fr);
     grid-template-columns: minmax(0, 1fr) var(--workspace-panel-width);
@@ -341,6 +327,58 @@
 
   .workspace-main[data-panel-open="false"] .panel-tab-list {
     display: none;
+  }
+}
+
+/* 抽屉叠在完整画布上，打开和收起都不改变画布尺寸或重新挂载。 */
+@media (max-width: 639px), (max-width: 1023px) and (max-height: 540px) and (orientation: landscape) {
+  .app-shell {
+    height: max(0px, calc(100dvh - var(--workspace-keyboard-offset, 0px)));
+  }
+
+  .workspace-main,
+  .workspace-main[data-panel-open="false"] {
+    --control-height: 2.75rem;
+    --control-icon-size: 2.75rem;
+    --workspace-panel-bar-height: calc(var(--control-height) + 1rem + 1px);
+    position: relative;
+    display: block;
+  }
+
+  .workspace-scene {
+    width: 100%;
+    height: calc(100% - var(--workspace-panel-bar-height));
+  }
+
+  .workspace-panel {
+    position: absolute;
+    z-index: 10;
+    inset-inline: 0;
+    bottom: 0;
+    height: min(80%, 100%);
+    border: 1px solid var(--border);
+    border-bottom: 0;
+    border-radius: 0.75rem 0.75rem 0 0;
+    box-shadow: 0 -0.25rem 1rem rgb(0 0 0 / 0.12);
+  }
+
+  .workspace-main[data-panel-open="false"] .workspace-panel {
+    height: var(--workspace-panel-bar-height);
+    border-radius: 0;
+    box-shadow: none;
+  }
+
+  .panel-toolbar {
+    border-bottom: 1px solid var(--border);
+    touch-action: pan-x pinch-zoom;
+  }
+
+  .workspace-main[data-panel-open="false"] .panel-toolbar {
+    border-bottom: 0;
+  }
+
+  .workspace-panel [data-slot="scroll-area-viewport"] {
+    scroll-padding-block: 1rem;
   }
 }
 

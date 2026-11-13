@@ -1,11 +1,11 @@
 "use client";
 
-import { useId, useState, type RefObject } from "react";
-import { Box, Boxes, CircleHelp, Focus, Maximize, Minimize, RotateCcw, SlidersHorizontal, View, X } from "lucide-react";
+import { useEffect, useRef, useState, type RefObject } from "react";
+import { Box, Boxes, CircleHelp, Focus, Maximize, Minimize, RotateCcw, Ruler, View, X } from "lucide-react";
 import type { ViewAction } from "@/lib/scene-fit";
 import { Button } from "@/components/ui/button";
+import { IconButton } from "@/components/ui/icon-button";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
-import { Slider } from "@/components/ui/slider";
 
 type Props = {
   amount: number;
@@ -15,6 +15,8 @@ type Props = {
   fullscreenBusy: boolean;
   fullscreenContainer: RefObject<HTMLElement | null>;
   error: string;
+  showDimensions?: boolean;
+  onShowDimensionsChange?: (enabled: boolean) => void;
   onAmountChange: (amount: number) => void;
   onView: (action: ViewAction) => void;
   onFullscreen: () => void;
@@ -26,45 +28,140 @@ const VIEWS = [
   { action: "top", label: "顶视", axis: "+Y", description: "从上方看，X 向右、−Z 朝屏幕上方" },
 ] as const;
 
-export function SceneToolbar({ amount, empty, fullscreen, fullscreenSupported, fullscreenBusy, fullscreenContainer, error, onAmountChange, onView, onFullscreen }: Props) {
-  const [adjusting, setAdjusting] = useState(false);
+export function SceneToolbar({ amount, empty, fullscreen, fullscreenSupported, fullscreenBusy, fullscreenContainer, error, showDimensions = false, onShowDimensionsChange, onAmountChange, onView, onFullscreen }: Props) {
   const [dialog, setDialog] = useState<"views" | "help" | null>(null);
-  const labelId = useId();
-  const sliderId = useId();
+  const buttonRef = useRef<HTMLButtonElement>(null);
+  const clickTimeout = useRef<number | null>(null);
+  const touchStart = useRef<{ x: number; y: number; value: number } | null>(null);
+  const isHovering = useRef(false);
+
+  // 清理 timeout
+  useEffect(() => {
+    return () => {
+      if (clickTimeout.current !== null) {
+        clearTimeout(clickTimeout.current);
+      }
+    };
+  }, []);
+
+  // 单击：切换 0% 和 100%
+  // 双击：回到 0% 或 100%（取决于当前是拆还是不拆）
+  function handleClick() {
+    if (clickTimeout.current !== null) {
+      // 双击
+      clearTimeout(clickTimeout.current);
+      clickTimeout.current = null;
+      onAmountChange(amount > 0 ? 100 : 0);
+    } else {
+      // 等待可能的双击
+      // 在测试环境中，如果 setTimeout 不可用，立即执行单击
+      if (typeof setTimeout === 'undefined') {
+        onAmountChange(amount > 0 ? 0 : 100);
+      } else {
+        clickTimeout.current = setTimeout(() => {
+          clickTimeout.current = null;
+          // 单击：切换装配/拆解
+          onAmountChange(amount > 0 ? 0 : 100);
+        }, 300) as unknown as number;
+      }
+    }
+  }
+
+  // 移动端：按住滑动改变百分比
+  function handleTouchStart(event: React.TouchEvent<HTMLButtonElement>) {
+    if (event.touches.length !== 1) return;
+    const touch = event.touches[0];
+    touchStart.current = { x: touch.clientX, y: touch.clientY, value: amount };
+  }
+
+  function handleTouchMove(event: React.TouchEvent<HTMLButtonElement>) {
+    if (!touchStart.current || event.touches.length !== 1) return;
+    const touch = event.touches[0];
+    const dx = touch.clientX - touchStart.current.x;
+    const dy = touch.clientY - touchStart.current.y;
+    
+    // 检测是否移动超过阈值
+    if (Math.abs(dx) > 10 || Math.abs(dy) > 10) {
+      // 清除单击/双击定时器
+      if (clickTimeout.current) {
+        clearTimeout(clickTimeout.current);
+        clickTimeout.current = null;
+      }
+      
+      // 水平或垂直滑动改变百分比，每 2px 改变 1%
+      const delta = Math.abs(dx) > Math.abs(dy) ? dx : -dy;
+      const newValue = Math.max(0, Math.min(100, touchStart.current.value + Math.round(delta / 2)));
+      onAmountChange(newValue);
+      event.preventDefault();
+    }
+  }
+
+  function handleTouchEnd() {
+    touchStart.current = null;
+  }
+
+  // PC端：鼠标悬停时用滚轮改变百分比
+  function handleMouseEnter() {
+    isHovering.current = true;
+  }
+
+  function handleMouseLeave() {
+    isHovering.current = false;
+  }
+
+  function handleWheel(event: React.WheelEvent<HTMLButtonElement>) {
+    if (!isHovering.current || empty) return;
+    event.preventDefault();
+    const delta = event.deltaY > 0 ? -5 : 5; // 每次滚轮滚动改变 5%
+    const newValue = Math.max(0, Math.min(100, amount + delta));
+    onAmountChange(newValue);
+  }
 
   return (
     <>
-      <div role="group" aria-label="3D 视图工具栏" className="scene-tools border-t border-border bg-background">
+      <div role="group" aria-label="3D 视图工具栏" className="scene-tools">
         <div className="flex min-w-0 flex-wrap items-center justify-between gap-2">
           <div role="group" aria-label="视图操作" className="flex items-center gap-1">
-            <Button variant="outline" size="touch" className="scene-primary-action" onClick={() => setDialog("views")} aria-label="视角" title="切换观察方向" aria-haspopup="dialog"><View className="size-4" /><span className="scene-action-label">视角</span></Button>
-            <Button variant="ghost" size="icon-touch" aria-label="适应视图" title="适应视图 · 保留观察方向" onClick={() => onView("fit")}><Focus className="size-4" /></Button>
-            <Button variant="ghost" size="icon-touch" className="scene-extended-control" aria-label="重置视角" title="重置视角 · 恢复默认斜视" onClick={() => onView("reset")}><RotateCcw className="size-4" /></Button>
-            <Button variant="ghost" size="icon-touch" aria-label={fullscreen ? "退出全屏" : "全屏视图"} aria-pressed={fullscreen} aria-busy={fullscreenBusy}
+            <IconButton label="视角" title="切换观察方向" aria-haspopup="dialog" onClick={() => setDialog("views")}><View className="size-4" /></IconButton>
+            <IconButton label="适应视图" title="适应当前展示并重新居中，保留观察方向" onClick={() => onView("fit")}><Focus className="size-4" /></IconButton>
+            {onShowDimensionsChange && (
+              <IconButton label={showDimensions ? "隐藏尺寸标注" : "显示尺寸标注"} active={showDimensions} disabled={empty} onClick={() => onShowDimensionsChange(!showDimensions)}><Ruler className="size-4" /></IconButton>
+            )}
+            <IconButton className="scene-extended-control" label="重置视角" title="重置视角 · 恢复默认斜视" onClick={() => onView("reset")}><RotateCcw className="size-4" /></IconButton>
+            <IconButton label={fullscreen ? "退出全屏" : "全屏视图"} aria-pressed={fullscreen} aria-busy={fullscreenBusy}
               title={fullscreenBusy ? "正在切换全屏…" : fullscreen ? "退出全屏 · Esc" : fullscreenSupported ? "全屏视图" : "当前浏览器不支持全屏"}
-              disabled={fullscreenBusy || (!fullscreen && !fullscreenSupported)} onClick={onFullscreen}>{fullscreen ? <Minimize className="size-4" /> : <Maximize className="size-4" />}</Button>
-            <Button variant="ghost" size="icon-touch" className="scene-extended-control" aria-label="坐标与拆解说明" title="坐标与拆解说明" aria-haspopup="dialog" onClick={() => setDialog("help")}><CircleHelp className="size-4" /></Button>
+              disabled={fullscreenBusy || (!fullscreen && !fullscreenSupported)} onClick={onFullscreen}>{fullscreen ? <Minimize className="size-4" /> : <Maximize className="size-4" />}</IconButton>
+            <IconButton className="scene-extended-control" label="坐标与拆解说明" aria-haspopup="dialog" onClick={() => setDialog("help")}><CircleHelp className="size-4" /></IconButton>
           </div>
           <div role="group" aria-label="结构展示" className="flex min-w-0 items-center gap-1">
-            <Button variant="secondary" size="touch" className="scene-primary-action" disabled={empty} onClick={() => onAmountChange(amount === 100 ? 0 : 100)} aria-label={amount === 100 ? "恢复装配" : "一键拆解"} title={amount === 100 ? "恢复装配" : "一键拆解"}>
-              {amount === 100 ? <Box className="size-4" /> : <Boxes className="size-4" />}<span className="scene-action-label">{amount === 100 ? "装配" : "拆解"}</span>
+            <Button
+              ref={buttonRef}
+              variant={amount > 0 ? "secondary" : "ghost"}
+              size={amount > 0 ? "touch" : "icon-touch"}
+              className={amount > 0 ? "min-h-[var(--control-height)] gap-1 px-2.5 font-mono text-xs tabular-nums" : "size-[var(--control-icon-size)] p-0"}
+              disabled={empty}
+              onClick={handleClick}
+              onTouchStart={handleTouchStart}
+              onTouchMove={handleTouchMove}
+              onTouchEnd={handleTouchEnd}
+              onMouseEnter={handleMouseEnter}
+              onMouseLeave={handleMouseLeave}
+              onWheel={handleWheel}
+              aria-label={amount === 100 ? "恢复装配" : amount > 0 ? `当前分离 ${amount}%` : "拆解"}
+              title={amount === 100 ? "点击：恢复装配 · 双击：保持完全拆解 · 滚轮或滑动：调整" : amount > 0 ? `点击：完全拆解 · 双击：恢复装配 · 滚轮或滑动：调整` : "点击：拆解 · 滚轮或滑动：调整"}
+            >
+              {amount === 100 ? <Boxes className="size-4 shrink-0" /> : <Box className="size-4 shrink-0" />}
+              {amount > 0 && <span>{amount}%</span>}
             </Button>
-            <span className="scene-separation-value w-9 shrink-0 text-right font-mono text-xs tabular-nums text-muted-foreground" aria-label={`分离程度 ${amount}%`}>{amount}%</span>
-            <Button variant="ghost" size="icon-touch" aria-label="调整分离程度" title="调整分离程度" disabled={empty} aria-expanded={adjusting} aria-controls={sliderId} onClick={() => setAdjusting((value) => !value)}><SlidersHorizontal className="size-4" /></Button>
           </div>
         </div>
-        {adjusting && <div id={sliderId} className="flex min-w-0 items-center gap-2 border-t border-border pt-2">
-          <span id={labelId} className="shrink-0 text-xs text-muted-foreground">分离 {amount}%</span>
-          <Slider className="min-w-0 flex-1 px-3" aria-labelledby={labelId} thumbProps={{ getAriaLabel: () => "分离程度", getAriaValueText: (_, value) => `分离 ${value}%` }} value={[amount]} min={0} max={100} step={1} onValueChange={(value) => onAmountChange(Array.isArray(value) ? value[0] : value)} />
-          <Button variant="ghost" size="icon-touch" aria-label="恢复装配" title="恢复装配 · 分离程度归零" disabled={amount === 0} onClick={() => onAmountChange(0)}><Box className="size-4" /></Button>
-        </div>}
         {error && <p role="alert" className="text-xs leading-relaxed text-destructive">{error}</p>}
       </div>
       <Dialog open={dialog !== null} onOpenChange={(open) => { if (!open) setDialog(null); }}>
         <DialogContent container={fullscreenContainer}>
           <div className="flex items-center justify-between gap-2">
             <DialogTitle>{dialog === "views" ? "切换观察方向" : "坐标与拆解说明"}</DialogTitle>
-            <Button variant="ghost" size="icon-touch" aria-label="关闭视图说明" onClick={() => setDialog(null)}><X className="size-4" /></Button>
+            <IconButton label="关闭视图说明" onClick={() => setDialog(null)}><X className="size-4" /></IconButton>
           </div>
           <DialogDescription>{dialog === "views" ? "按世界坐标选择观察方向，切换视角只影响画布，不改变设计。" : "坐标帮助确定零件位置；自动拆解帮助观察结构，不是装配求解器。"}</DialogDescription>
           {dialog === "views" ? <div role="group" aria-label="观察方向" className="grid gap-2">
@@ -78,13 +175,12 @@ export function SceneToolbar({ amount, empty, fullscreen, fullscreenSupported, f
               <h3 className="text-sm font-medium">右手坐标 · 全局毫米</h3>
               <p><span className="axis-x font-mono">+X</span> 向右　<span className="axis-y font-mono">+Y</span> 向上　<span className="axis-z font-mono">+Z</span> 朝正面。</p>
               <p>以上方向以正视为基准；模型原点在地面中心，地面为 Y=0。零件位置是中心点，不是端点。右上角坐标轴会随观察姿态旋转。</p>
-              <p className="text-muted-foreground">“适应视图”保留方向重新居中；“重置视角”恢复默认斜视。两者都不改变拆解状态。</p>
+              <p className="text-muted-foreground">“适应视图”保留方向并按当前装配或拆解状态重新居中；“重置视角”恢复默认斜视。两者都不改变拆解状态。</p>
             </section>
-            <section className="space-y-2 border-t border-border pt-3" aria-label="拆解机制说明">
-              <h3 className="text-sm font-medium">为什么仍有分离程度？</h3>
-              <p>点“拆解”直接到 100%，点“装配”回到 0%；微调用于观察中间关系。百分比是展示位移的强度，不是拆装工序的完成进度。</p>
-              <p>自动拆解按零件位置、尺寸、类型和角色关键词同时展开，不包含连接拓扑、碰撞检测或真实拆装顺序。旋转、密集及特殊结构可能仍有遮挡；100% 不保证完全分离或实际可拆。</p>
-              <p className="text-muted-foreground">不同项目可能需要专门的方向、分组和步骤方案，当前没有配置这些规则。展示不会修改正式 JSON，也不代表结构安全或可制造性认证。</p>
+            <section className="space-y-2 border-t border-border pt-3" aria-label="拆解视图说明">
+              <h3 className="text-sm font-medium">拆解视图</h3>
+              <p>点击“拆解”展开零件，点击“装配”恢复；分离程度可调整展示距离。</p>
+              <p className="text-muted-foreground">拆解仅用于观察，不表示实际拆装顺序或结构安全；完全展开也不保证所有零件分离或可拆。</p>
             </section>
           </div>}
         </DialogContent>

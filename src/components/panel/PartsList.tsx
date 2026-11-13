@@ -2,6 +2,7 @@
 
 import { useMemo, type CSSProperties, type ReactNode } from "react";
 import type { Design } from "@/lib/schema";
+import type { ValidationIssue } from "@/lib/projects";
 import { materialLook } from "@/lib/materials";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
@@ -10,10 +11,18 @@ type Props = {
   design: Design;
   selectedId: string | null;
   onSelect: (id: string) => void;
+  issues?: ValidationIssue[];
   children?: ReactNode;
 };
 
-export function PartsList({ design, selectedId, onSelect, children }: Props) {
+export function PartsList({ design, selectedId, onSelect, issues = [], children }: Props) {
+  const issueCountByPart = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const issue of issues) {
+      if (issue.partId) map.set(issue.partId, (map.get(issue.partId) ?? 0) + 1);
+    }
+    return map;
+  }, [issues]);
   // 按角色分组，保持 design.json 里的原始顺序
   const groups = useMemo(() => {
     const map = new Map<string, Design["parts"]>();
@@ -47,13 +56,14 @@ export function PartsList({ design, selectedId, onSelect, children }: Props) {
               <div className="min-w-0 space-y-1">
                 {parts.map((part) => {
                   const active = selectedId === part.id;
+                  const issueCount = issueCountByPart.get(part.id) ?? 0;
                   return (
                     <button
                       key={part.id}
                       type="button"
                       aria-pressed={active}
-                      title={`${part.id} · ${part.material}`}
-                      aria-label={`${part.role}，${part.id}，${part.size.join(" × ")} 毫米，${part.profile ?? part.material}`}
+                      title={`${part.id} · ${part.material}${issueCount ? ` · ${issueCount} 项提醒` : ""}`}
+                      aria-label={`${part.role}，${part.id}，${part.size.join(" × ")} 毫米，${part.profile ?? part.material}${issueCount ? `，${issueCount} 项提醒` : ""}`}
                       onClick={() => onSelect(active ? "" : part.id)}
                       className={cn(
                         "flex min-h-[var(--control-height)] w-full min-w-0 items-center gap-2 rounded-lg border border-transparent px-2 py-1.5 text-left transition-colors focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50",
@@ -78,6 +88,11 @@ export function PartsList({ design, selectedId, onSelect, children }: Props) {
                           {part.profile ?? part.material}
                         </span>
                       </span>
+                      {issueCount > 0 && (
+                        <span className="shrink-0 rounded-md bg-destructive/10 px-1.5 py-0.5 font-mono text-xs text-destructive">
+                          提醒 {issueCount}
+                        </span>
+                      )}
                     </button>
                   );
                 })}

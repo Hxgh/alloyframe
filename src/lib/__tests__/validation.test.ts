@@ -154,3 +154,41 @@ test("BOM massKg 始终是行总重，两个 CSV 单重除数量且总重不再�
   assert.deepEqual(cutListCsv(bom).split("\n")[1].split(",").slice(2, 5), ["2", "2.000", "4.000"]);
   assert.deepEqual(bomCsv(bom).split("\n")[1].split(",").slice(5, 7), ["2.000", "4.000"]);
 });
+
+test("空间防呆检查：型材未做端头扣减产生干涉警告，悬空构件产生悬空警告，同心套管柱豁免", () => {
+  const overlappingBeams = inspect({
+    ...empty,
+    parts: [
+      {
+        id: "rail-front", kind: "beam", role: "前梁", profile: "4040",
+        material: "铝", size: [1000, 40, 40], position: [0, 20, 200],
+      },
+      {
+        id: "rail-left", kind: "beam", role: "左梁", profile: "4040",
+        material: "铝", size: [40, 40, 440], position: [-480, 20, 0],
+      },
+    ],
+  });
+  assert.ok(overlappingBeams.design);
+  assert.ok(overlappingBeams.issues.some((issue) => issue.level === "warning"
+    && issue.partId === "rail-left"
+    && /空间干涉/.test(issue.message)));
+
+  const floatingPart = inspect({
+    ...empty,
+    parts: [
+      {
+        id: "base", kind: "box", role: "底座", material: "钢",
+        size: [100, 20, 100], position: [0, 10, 0],
+      },
+      {
+        id: "floating-top", kind: "plate", role: "顶板", material: "木",
+        size: [200, 20, 200], position: [0, 100, 0],
+      },
+    ],
+  });
+  assert.ok(floatingPart.design);
+  assert.ok(floatingPart.issues.some((issue) => issue.level === "warning"
+    && issue.partId === "floating-top"
+    && /悬空/.test(issue.message)));
+});

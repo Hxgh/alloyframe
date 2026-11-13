@@ -7,6 +7,7 @@ import type { AccessoryCatalog, Catalog, Design } from "./schema";
 import type { ProjectLibrary, ProjectRecord, ProjectSummary, ValidationIssue } from "./projects";
 import { inspectDesign } from "./validation";
 import { getProjectEnv } from "./project-env";
+import { buildTemplateDesign, type ProjectTemplateId } from "./project-templates";
 
 export class ProjectStoreError extends Error {
   constructor(public status: number, message: string, public issues?: ValidationIssue[]) {
@@ -278,9 +279,10 @@ export function createProjectStore(options: ProjectStoreOptions) {
       projects: await summaries(false), archived: await summaries(true), writable: writable(),
     })),
     getProject: (id: string, archived = false) => serialize(root, () => record(id, archived)),
-    createProject: (name: string) => serialize(root, async () => {
+    createProject: (name: string, templateId: ProjectTemplateId = "blank") => serialize(root, async () => {
       assertWritable();
-      const design = DesignSchema.parse({ id: "project", name: projectName(name), units: "mm", parts: [] });
+      const candidate = buildTemplateDesign(projectName(name), templateId);
+      const design = templateId === "blank" ? candidate : await validated(candidate);
       return insert(design);
     }),
     importProject: (input: unknown, name?: string) => serialize(root, async () => {
@@ -314,7 +316,7 @@ function defaultStore() { return createProjectStore({ root: getDataRoot() }); }
 
 export const getProjectLibrary = (): Promise<ProjectLibrary> => defaultStore().getProjectLibrary();
 export const getProject = (id: string, archived = false): Promise<ProjectRecord> => defaultStore().getProject(id, archived);
-export const createProject = (name: string): Promise<ProjectRecord> => defaultStore().createProject(name);
+export const createProject = (name: string, templateId?: ProjectTemplateId): Promise<ProjectRecord> => defaultStore().createProject(name, templateId);
 export const importProject = (input: unknown, name?: string): Promise<ProjectRecord> => defaultStore().importProject(input, name);
 export const copyProject = (id: string, name?: string, expected?: string): Promise<ProjectRecord> => defaultStore().copyProject(id, name, expected);
 export const saveProject = (id: string, input: unknown, expected: string): Promise<ProjectRecord> => defaultStore().saveProject(id, input, expected);
