@@ -259,6 +259,60 @@ function fullscreenButton(markup: string) {
   return button;
 }
 
+function explodeButton(markup: string) {
+  const button = markup.match(/<button\b[^>]*data-testid="explode-button"[^>]*>[\s\S]*?<\/button>/)?.[0];
+  assert.ok(button);
+  return button;
+}
+
+test("拆解图标由完整立方体连续分离为三个面，整体尺寸及线宽不变且可逆", () => {
+  const paths = ["M12 2 22 7 12 12 2 7Z", "M2 7 12 12 12 22 2 17Z", "M12 12 22 7 22 17 12 22Z"];
+  const origins = [[12, 2], [2, 22], [22, 22]];
+  for (const amount of [0, 1, 32, 33, 50, 65, 66, 99, 100, 50, 0]) {
+    const button = explodeButton(renderToolbar({ amount }));
+    assert.equal(button.match(/<svg\b/g)?.length, 1);
+    assert.match(button, /class="scene-explode-icon size-4" viewBox="0 0 24 24"/);
+    assert.match(button, /aria-hidden="true" focusable="false"/);
+    const faces = [...button.matchAll(/<path\b[^>]*>/g)].map((match) => match[0]);
+    assert.equal(faces.length, 3);
+    assert.deepEqual(faces.map((face) => face.match(/\bd="([^"]+)"/)?.[1]), paths);
+    const scale = 1 - amount / 100 * 0.28;
+    const points: number[][] = [];
+    faces.forEach((face, index) => {
+      const [originX, originY] = origins[index];
+      assert.ok(face.includes(`transform-origin:${originX}px ${originY}px`));
+      assert.ok(face.includes(`transform:scale(${scale})`));
+      assert.match(face, /vector-effect="non-scaling-stroke"/);
+      const coordinates = paths[index].match(/\d+/g)!.map(Number);
+      for (let i = 0; i < coordinates.length; i += 2) {
+        points.push([originX + (coordinates[i] - originX) * scale, originY + (coordinates[i + 1] - originY) * scale]);
+      }
+    });
+    for (const axis of [0, 1]) {
+      assert.equal(Math.min(...points.map((point) => point[axis])), 2);
+      assert.equal(Math.max(...points.map((point) => point[axis])), 22);
+    }
+    assert.doesNotMatch(button, /translate[XY]?\(|lucide-|<animate\b/);
+  }
+});
+
+test("拆解按钮明确当前比例及点击动作，激活态和空设计禁用保持一致", () => {
+  for (const amount of [0, 42, 100]) {
+    const button = explodeButton(renderToolbar({ amount }));
+    assert.ok(button.includes(`aria-label="${amount > 0 ? "装配" : "拆解"}"`));
+    assert.ok(button.includes(`aria-pressed="${amount > 0}"`));
+    assert.ok(button.includes(`当前拆解 ${amount}% · 点击${amount > 0 ? "恢复装配" : "完全拆解"}`));
+    assert.match(button, /滚轮微调，Shift 精调 · 上下滑动调整/);
+    assert.match(button, /size-\[var\(--control-icon-size\)\]/);
+    if (amount > 0) assert.match(button, /bg-secondary/);
+    assert.doesNotMatch(button, /disabled=""/);
+  }
+  const empty = explodeButton(renderToolbar({ amount: 0, empty: true }));
+  assert.match(empty, /disabled=""/);
+  assert.match(empty, /aria-pressed="false"/);
+  assert.doesNotMatch(empty, /滚轮微调|上下滑动调整/);
+});
+
 async function componentSource(path: string) {
   const text = await readFile(new URL(path, import.meta.url), "utf8");
   return ts.createSourceFile(path, text, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
@@ -304,7 +358,7 @@ test("全屏错误通过 alert 显示，拆解按钮和视角入口不随全屏�
   for (const fullscreen of [false, true]) {
     const markup = renderToolbar({ fullscreen, error: "浏览器未能切换全屏。可继续使用当前画布，或检查浏览器的全屏权限。" });
     assert.match(markup, /role="alert"[^>]*>浏览器未能切换全屏/);
-    assert.match(markup, /aria-label="拆解"|aria-label="恢复装配"|aria-label="当前分离 \d+%"/);
+    assert.match(markup, /aria-label="拆解"|aria-label="装配"|aria-label="拆解 \d+%"/);
     assert.match(markup, /aria-label="适应视图"/);
     assert.match(markup, /aria-label="坐标与拆解说明"/);
   }

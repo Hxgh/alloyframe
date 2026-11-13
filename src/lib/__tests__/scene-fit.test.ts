@@ -136,9 +136,12 @@ test("非方截面 Y 向型材的附加旋转与渲染采用同一变换", () =>
   assert.ok(Math.abs(box.max[2] - box.min[2] - 40) < 1e-6);
 });
 
-test("装配和最大拆解的联合边界覆盖中间状态", () => {
-  for (const amount of [0, 0.25, 0.5, 0.75, 1]) {
-    const current = designBounds(design.parts, explodeOffsets(design.parts, amount));
+test("地面约束后的端点联合边界覆盖全程，当前展示及逐件最低点不穿地", () => {
+  for (const amount of [0, 0.000001, ...Array.from({ length: 100 }, (_, i) => (i + 1) / 100)]) {
+    const offsets = explodeOffsets(design.parts, amount);
+    const current = designBounds(design.parts, offsets);
+    assert.ok(current.min[1] >= -1e-8);
+    for (const part of design.parts) assert.ok(designBounds([part], offsets).min[1] >= -1e-8, part.id);
     for (let axis = 0; axis < 3; axis++) {
       assert.ok(current.min[axis] >= bounds.min[axis]);
       assert.ok(current.max[axis] <= bounds.max[axis]);

@@ -50,7 +50,8 @@ export function buildDimensionGuides(
   offsets?: ReadonlyMap<string, Vec3>,
 ): DimensionGuide[] {
   if (parts.length === 0) return [];
-  const overall = designBounds(parts, offsets);
+  // 整体包围始终使用装配状态（无偏移），不受拆解影响
+  const overall = designBounds(parts, undefined);
   const [minX, minY, minZ] = overall.min;
   const [maxX, maxY, maxZ] = overall.max;
   const widthX = maxX - minX;
@@ -58,9 +59,8 @@ export function buildDimensionGuides(
   const depthZ = maxZ - minZ;
   if (![widthX, heightY, depthZ].every((v) => Number.isFinite(v) && v >= 0)) return [];
 
-  // 标注当前世界包围范围；只有参与渲染的零件实际位移时才标记为拆解展示。
-  const exploded = parts.some((part) => offsets?.get(part.id)?.some((value) => value !== 0));
-  const stateLabel = exploded ? "拆解展示" : "装配包围";
+  // 整体标注始终显示"装配尺寸"，提供准确的产品测量数据
+  const stateLabel = "装配尺寸";
   const radius = boundsRadius(overall.min, overall.max);
   const margin = radius < 200 ? radius * 0.2 : Math.max(Math.min(radius * 0.12, 120), 40);
   const baseY = minY;
@@ -180,7 +180,7 @@ export function buildDimensionGuides(
         anchorB: [x, pMinY, pMaxZ],
         labelPosition: [x, pMinY / 2, z + localMargin * 0.3],
         valueMm: pMinY,
-        label: `${exploded ? "拆解展示" : "装配"}离地 ${formatMm(pMinY)}`,
+        label: `离地 ${formatMm(pMinY)}`,
         highlighted: true,
       });
     }

@@ -153,11 +153,11 @@ async function harness(initialMobile: boolean) {
     h, Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, window, document,
     HTMLElement: TestHTMLElement, HTMLInputElement: TestHTMLInputElement, PointerEvent: TestPointerEvent,
     useTheme: () => ({ resolvedTheme: "light" }), createFullscreenController, explodeOffsets: () => ({}),
-    Scene, PartEditor, ProjectPanel, Tabs, TabsContent: pass, TabsList: pass, TabsTrigger, Button, PartsList: pass,
+    Scene, PartEditor, ProjectPanel, Tabs, TabsContent: pass, TabsList: pass, TabsTrigger, Button, IconButton: Button, PartsList: pass,
     BomPanel: noop, Header: noop, ProjectToolbar: noop, SceneToolbar: noop, ConfirmDialog: noop, PartDetails: noop,
     unappliedFieldsWarning: "未应用", nextPartId: () => "new", mirrorPart: () => ({}),
   };
-  for (const icon of ["ChevronDown", "ChevronUp", "Copy", "FlipHorizontal2", "Pencil", "Plus", "Trash2", "X"]) bindings[icon] = noop;
+  for (const icon of ["ChevronDown", "ChevronLeft", "ChevronRight", "ChevronUp", "ClipboardList", "Copy", "FlipHorizontal2", "Package", "Pencil", "Plus", "Settings", "Trash2", "X"]) bindings[icon] = noop;
   const Workspace = runInNewContext(componentCode, bindings) as (props: Props) => ReactNode;
   const project = {
     text: "", issues: [], invalid: false, dirty: false, pending: false, formEpoch: 0, readOnly: false,

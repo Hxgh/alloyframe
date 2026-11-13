@@ -285,7 +285,7 @@ test("项目操作弹窗事件、状态、无障碍与禁用条件", async () =>
     return Button({ ...props, "aria-label": label, size: "icon-touch" });
   }
   const bindings: Record<string, unknown> = { h, Fragment, useId, useRef, useState, Button, IconButton, Switch, Dialog, DialogContent, DialogTitle, DialogDescription: pass };
-  for (const name of ["ChevronDown", "Copy", "Download", "FileCog", "FileJson", "LoaderCircle", "Redo2", "RefreshCw", "Save", "Undo2", "X"]) bindings[name] = noop;
+  for (const name of ["ChevronDown", "ChevronLeft", "ChevronRight", "ChevronUp", "Copy", "Download", "FileCog", "FileJson", "LoaderCircle", "Redo2", "RefreshCw", "Save", "Undo2", "X"]) bindings[name] = noop;
   const component = compile(`${declaration(toolbarSource, "ProjectToolbar")}\nProjectToolbar`, bindings) as (props: ComponentProps<typeof ProjectToolbar>) => ReactNode;
   const root = await createTestRoot();
   const props = toolbarProps({

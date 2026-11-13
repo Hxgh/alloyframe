@@ -1,5 +1,6 @@
 import type { Part } from "./schema";
 import { longAxis } from "./materials";
+import { designBounds } from "./tslot";
 
 export type ExplodeVector = [number, number, number];
 
@@ -11,6 +12,7 @@ export type ExplodeVector = [number, number, number];
  *     而不是沿着自己的长度滑走。
  *  2. 竖直件（长轴为 y）沿 +y 上抬。
  *  3. 平板（台面）最后单独上抬，露在最上方。
+ *  4. 向下分离不超过旋转后的离地净空，保证原本未穿地的零件全程不穿地。
  *
  * amount = 0 时全部位移为 0，保证可逆。
  */
@@ -76,6 +78,12 @@ export function explodeOffsets(parts: Part[], amount: number): Map<string, Explo
       // 高度不同的梁再叠一点竖直分离
       const dy = part.position[1] - cy;
       off[1] = (Math.abs(dy) < deadzone ? 0 : Math.sign(dy)) * strength * 0.35;
+    }
+
+    if (off[1] < 0) {
+      const clearance = Math.max(0, designBounds([part]).min[1]);
+      // 按满拆净空线性缩放，避免中途触地截停改变拆解节奏。
+      off[1] = Math.max(off[1], -clearance * amount) || 0;
     }
 
     result.set(part.id, off);

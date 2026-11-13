@@ -298,9 +298,9 @@ async function harness(width = 800, height = 600, inputDesign?: Design, delayedS
   for (const name of [
     "Environment", "GizmoHelper", "GizmoViewport", "Lightformer", "PartMesh", "SceneDimensions",
     "BomPanel", "TabsList", "TabsTrigger", "Header", "ProjectToolbar",
-    "PartEditor", "ProjectPanel", "ConfirmDialog", "Box", "Boxes", "CircleHelp", "Focus", "Maximize", "Minimize",
-    "RotateCcw", "Ruler", "SlidersHorizontal", "View", "X", "ChevronDown", "ChevronUp", "Copy", "FlipHorizontal2",
-    "Pencil", "Plus", "Trash2",
+    "PartEditor", "ProjectPanel", "ConfirmDialog", "Box", "Boxes", "ChevronDown", "ChevronLeft", "ChevronRight", "ChevronUp", "CircleHelp", 
+    "ClipboardList", "Copy", "FlipHorizontal2", "Focus", "Layers3", "Maximize", "Minimize", "Package", "PackageOpen", "Pencil", "Plus",
+    "RotateCcw", "Ruler", "Settings", "SlidersHorizontal", "Split", "Trash2", "View", "X",
   ]) bindings[name] = noop;
   const { Workspace } = runInNewContext(componentCode, bindings) as { Workspace: (props: Record<string, unknown>) => ReactNode };
   let design = inputDesign ?? DesignSchema.parse(designJson);
@@ -493,15 +493,19 @@ test("开启尺寸标注后显式 fit 包含真实标注边界且不改变方向
   try {
     const position = scene.camera.position.clone();
     const target = scene.controls.target.clone();
-    await scene.click("显示尺寸标注");
-    assert.equal(scene.calls.length, 0, "开关标注不能强制重置相机");
-    near(scene.camera.position, position, "显示标注不能改变相机位置");
-    near(scene.controls.target, target, "显示标注不能改变目标");
     const before = direction(scene.camera, scene.controls);
     const offsets = explodeOffsets(design.parts, 0);
     const guides = buildDimensionGuides(design.parts, null, offsets);
     assert.ok(guides.length > 0);
     const active = boundsWithGuides(displayedBounds(0), guides);
+    const nearPlane = Math.min(scene.camera.near, active.radius * 0.02);
+    const clipped = visibleBoundsDistance(active, scene.camera, target.toArray() as [number, number, number], 4 / 3, nearPlane);
+    const retreat = clipped > 0 ? visibleBoundsDistance(active, scene.camera, target.toArray() as [number, number, number], 4 / 3, nearPlane, 1.02) : 0;
+    await scene.click("显示尺寸标注");
+    assert.equal(scene.calls.length, 0, "开关标注不能强制重置相机");
+    near(scene.camera.position, position.addScaledVector(before, retreat), "显示标注仅在裁切时沿原方向后退");
+    near(scene.controls.target, target, "显示标注不能改变目标");
+    near(direction(scene.camera, scene.controls), before, "显示标注不能改变方向");
     assert.ok(active.radius > displayedBounds(0).radius, "夹具的标注应扩大包围半径");
     await scene.click("适应视图");
     assert.deepEqual(scene.calls.at(-1)?.bounds, active, "fit 应涵盖尺寸线和标签");
@@ -751,7 +755,9 @@ test("切换拆解不重置视角；等值边界保留用户操作，几何变�
     const before = direction(scene.camera, scene.controls);
     const count = scene.calls.length;
     await scene.click("拆解");
-    await scene.click("恢复装配");
+    await scene.flush();
+    await scene.click("装配");
+    await scene.flush();
     assert.equal(scene.calls.length, count, "拆解比例变化不能重新取景");
     near(scene.camera.position, position, "拆解往返不能移动相机");
     near(scene.controls.target, target, "拆解往返不能移动目标");

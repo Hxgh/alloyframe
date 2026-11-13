@@ -78,6 +78,11 @@ test("3D 优先布局保留桌面侧栏和手机抽屉入口，工具按自身�
   assert.match(toolbar, /label="视角"/);
 });
 
+test("拆解图标仅过渡自身面的变换，减少动态效果时直接显示目标状态", () => {
+  assert.match(css, /\.scene-explode-icon > path\s*\{\s*transition: transform 200ms cubic-bezier\(0\.2, 0, 0, 1\);\s*\}/);
+  assert.match(css, /@media \(prefers-reduced-motion: reduce\)\s*\{\s*\.scene-explode-icon > path\s*\{\s*transition: none;\s*\}/);
+});
+
 test("材料色块同时输出深浅色，主题不改变首屏标记、零件顺序或设计数据", () => {
   const before = JSON.stringify(design);
   const light = partsMarkup("light");

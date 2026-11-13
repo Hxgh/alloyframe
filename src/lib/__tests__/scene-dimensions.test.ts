@@ -28,9 +28,9 @@ test("三维尺寸标尺：未选中构件时输出整体宽深高，选中构�
 
   const overall = buildDimensionGuides(standingDesk.parts, null);
   assert.deepEqual(overall.map((guide) => guide.id), ["overall-x", "overall-z", "overall-y"]);
-  assert.equal(overall.find((guide) => guide.id === "overall-x")?.label, "装配包围宽 1400 mm");
-  assert.equal(overall.find((guide) => guide.id === "overall-z")?.label, "装配包围深 700 mm");
-  assert.equal(overall.find((guide) => guide.id === "overall-y")?.label, "装配包围高 720 mm");
+  assert.equal(overall.find((guide) => guide.id === "overall-x")?.label, "装配尺寸宽 1400 mm");
+  assert.equal(overall.find((guide) => guide.id === "overall-z")?.label, "装配尺寸深 700 mm");
+  assert.equal(overall.find((guide) => guide.id === "overall-y")?.label, "装配尺寸高 720 mm");
   const bounds = designBounds(standingDesk.parts);
   const radius = Math.hypot(...bounds.max.map((value, i) => value - bounds.min[i])) / 2;
   const margin = Math.max(Math.min(radius * 0.12, 120), 40);
@@ -46,7 +46,7 @@ test("三维尺寸标尺：未选中构件时输出整体宽深高，选中构�
   assert.equal(sizeGuide.valueMm, 1300);
   nearNumber(sizeGuide.badgeHeight, overall[0].badgeHeight * 1.05 * 2, 1e-10, "高亮双行标牌保留原有视觉倍率");
   assert.ok(elevationGuide);
-  assert.equal(elevationGuide.label, "装配离地 655 mm");
+  assert.equal(elevationGuide.label, "离地 655 mm");
 
   // 贴地构件（minY === 0）不生成冗余离地高度线
   const withGroundPart = buildDimensionGuides(standingDesk.parts, "foot-left");
@@ -121,7 +121,7 @@ test("1mm 与亚毫米模型保留三轴真实尺寸、非零文字与等比例�
     const tolerance = size * 1e-12;
     for (const [id, axisIndex, chinese] of [["overall-x", 0, "宽"], ["overall-y", 1, "高"], ["overall-z", 2, "深"]] as const) {
       const guide = guides.find((item) => item.id === id)!;
-      assert.equal(guide.label, `装配包围${chinese} ${expected} mm`);
+      assert.equal(guide.label, `装配尺寸${chinese} ${expected} mm`);
       nearNumber(guide.valueMm, size, tolerance, `${id} 的值不能归零`);
       nearNumber(new THREE.Vector3(...guide.end).distanceTo(new THREE.Vector3(...guide.start)), guide.valueMm, tolerance, `${id} 的几何长度必须与数值一致`);
       nearNumber(Math.abs(guide.end[axisIndex] - guide.start[axisIndex]), size, tolerance, `${id} 应沿对应轴`);
@@ -170,20 +170,21 @@ test("微型非方截面型材和零件旋转、拆解时标尺与实际变换�
     const localAxis = part.kind === "beam" ? 2 : 1;
     checkGuideGeometry(part, selected, localAxis, localSize, offset);
     assert.equal(selected.valueMm, Math.max(...part.size));
-    const bounds = designBounds([part], offsets);
+    // 整体标注基于装配状态，不受拆解影响
+    const bounds = designBounds([part], undefined);
     const tolerance = Math.max(...part.size) * 1e-10;
     for (const [id, axis, text] of [["overall-x", 0, "宽"], ["overall-y", 1, "高"], ["overall-z", 2, "深"]] as const) {
       const guide = guides.find((item) => item.id === id)!;
       if (axis !== 1) {
-        nearNumber(guide.anchorA[1], bounds.min[1], tolerance, `${id} 的引线应连接到模型下边界`);
-        nearNumber(guide.anchorB[1], bounds.min[1], tolerance, `${id} 的引线应连接到模型下边界`);
+        nearNumber(guide.anchorA[1], bounds.min[1], tolerance, `${id} 的引线应连接到装配状态下边界`);
+        nearNumber(guide.anchorB[1], bounds.min[1], tolerance, `${id} 的引线应连接到装配状态下边界`);
       }
-      nearNumber(guide.valueMm, bounds.max[axis] - bounds.min[axis], tolerance, `${id} 应反映旋转后的包围尺寸`);
+      nearNumber(guide.valueMm, bounds.max[axis] - bounds.min[axis], tolerance, `${id} 应反映装配状态包围尺寸`);
       nearNumber(new THREE.Vector3(...guide.start).distanceTo(new THREE.Vector3(...guide.end)), guide.valueMm, tolerance, `${id} 标尺长度应等于真实尺寸`);
-      const match = guide.label.match(new RegExp(`^拆解展示${text} (.+) mm$`));
+      const match = guide.label.match(new RegExp(`^装配尺寸${text} (.+) mm$`));
       assert.ok(match && Number(match[1]) > 0);
       assert.ok(Math.abs(Number(match[1]) - guide.valueMm) / guide.valueMm <= 0.005, `${id} 标牌显示应在真实值 0.5% 内`);
-      assert.match(assembled.find((item) => item.id === id)!.label, /^装配包围/);
+      assert.match(assembled.find((item) => item.id === id)!.label, /^装配尺寸/);
     }
     const previous = selectedGuide([part], part.id);
     for (const key of ["start", "end", "anchorA", "anchorB", "labelPosition"] as const) {
@@ -225,7 +226,7 @@ test("非方截面型材及其他零件按实际渲染几何确定长度、方�
   }
 });
 
-test("拆解位移只平移零件尺寸线，整体包围和离地标牌明确区分装配与展示", () => {
+test("拆解位移只平移零件尺寸线，整体包围固定装配状态", () => {
   const part = fixture({ rotation: [45, 0, 0] });
   const other = fixture({ id: "other", size: [600, 40, 80], position: [-700, 180, 120] });
   const parts = [part, other];
@@ -243,44 +244,55 @@ test("拆解位移只平移零件尺寸线，整体包围和离地标牌明确�
     near(after[key], expected.toArray() as Vec3, `${key} 应随零件同向平移`);
   }
   checkGuideGeometry(part, after, 2, [40, 40, 1000], offset);
-  const bounds = designBounds(parts, offsets);
+  
+  // 关键修改：整体包围固定装配状态，不受拆解影响
+  const assembledBounds = designBounds(parts, undefined);
   for (const [id, index, label] of [["overall-x", 0, "宽"], ["overall-y", 1, "高"], ["overall-z", 2, "深"]] as const) {
-    const guide = exploded.find((item) => item.id === id);
-    assert.ok(guide);
-    nearNumber(guide.valueMm, bounds.max[index] - bounds.min[index], 1e-10, `${id} 必须等于实际包围跨度`);
-    assert.match(guide.label, new RegExp(`^拆解展示${label} `));
-    assert.match(assembled.find((item) => item.id === id)!.label, new RegExp(`^装配包围${label} `));
+    const guideAssembled = assembled.find((item) => item.id === id);
+    const guideExploded = exploded.find((item) => item.id === id);
+    assert.ok(guideAssembled && guideExploded);
+    // 两者数值相同，都基于装配状态
+    assert.equal(guideAssembled.valueMm, guideExploded.valueMm);
+    nearNumber(guideExploded.valueMm, assembledBounds.max[index] - assembledBounds.min[index], 1e-10, `${id} 必须等于装配包围跨度`);
+    // 标签都是"装配尺寸"
+    assert.match(guideExploded.label, new RegExp(`^装配尺寸${label} `));
+    assert.match(guideAssembled.label, new RegExp(`^装配尺寸${label} `));
   }
+  
+  // 选中零件的离地高度跟随拆解
   const elevation = exploded.find((item) => item.id === `selected-${part.id}-elevation`);
   const assembledElevation = assembled.find((item) => item.id === `selected-${part.id}-elevation`);
   assert.ok(elevation && assembledElevation);
   nearNumber(elevation.valueMm, designBounds([part], offsets).min[1], 1e-10, "拆解离地距离必须采用真实几何");
   nearNumber(elevation.valueMm, assembledElevation.valueMm + offset[1], 1e-10, "离地距离随拆解位移变化");
-  assert.match(elevation.label, /^拆解展示离地 /);
-  assert.match(assembledElevation.label, /^装配离地 /);
+  assert.match(elevation.label, /^离地 /);
+  assert.match(assembledElevation.label, /^离地 /);
   assert.deepEqual(elevation.start.slice(0, 2), [designBounds([part], offsets).center[0], 0]);
   assert.equal(elevation.end[1], designBounds([part], offsets).min[1]);
   assert.equal(elevation.labelPosition[1], elevation.end[1] / 2);
   const almostGrounded = fixture({ kind: "box", profile: null, size: [100, 100, 100], position: [0, 51, 0] });
   const lifted = buildDimensionGuides([almostGrounded], almostGrounded.id, new Map([[almostGrounded.id, [0, 2, 0]]]));
   assert.equal(buildDimensionGuides([almostGrounded], almostGrounded.id).some((guide) => guide.axis === "elevation"), false);
-  assert.equal(lifted.find((guide) => guide.axis === "elevation")?.label, "拆解展示离地 3 mm");
+  assert.equal(lifted.find((guide) => guide.axis === "elevation")?.label, "离地 3 mm");
   const lowered = buildDimensionGuides([almostGrounded], almostGrounded.id, new Map([[almostGrounded.id, [0, -3, 0]]]));
   assert.equal(lowered.some((guide) => guide.axis === "elevation"), false);
-  const loweredBounds = designBounds([almostGrounded], new Map([[almostGrounded.id, [0, -3, 0]]]));
-  assert.equal(lowered.find((guide) => guide.id === "overall-x")!.anchorA[1], loweredBounds.min[1]);
-  assert.equal(lowered.find((guide) => guide.id === "overall-z")!.anchorB[1], loweredBounds.min[1]);
+  // 整体标注基于装配状态，不受拆解影响
+  const groundedBounds = designBounds([almostGrounded], undefined);
+  assert.equal(lowered.find((guide) => guide.id === "overall-x")!.anchorA[1], groundedBounds.min[1]);
+  assert.equal(lowered.find((guide) => guide.id === "overall-z")!.anchorB[1], groundedBounds.min[1]);
   assert.deepEqual(parts, original);
 });
 
-test("零偏移与无关偏移保持装配语义，实际移动才标记拆解展示", () => {
+test("零偏移与无关偏移结果一致，整体标注始终为装配尺寸", () => {
   const part = fixture();
   const zeroOffsets = new Map<string, Vec3>([[part.id, [0, 0, 0]], ["missing", [10, 20, 30]]]);
   assert.deepEqual(buildDimensionGuides([part], part.id, zeroOffsets), buildDimensionGuides([part], part.id));
   const other = fixture({ id: "other", position: [800, 600, 0] });
   const movedOther = buildDimensionGuides([part, other], part.id, new Map([[other.id, [10, 0, 0]]]));
-  assert.match(movedOther.find((guide) => guide.id === "overall-x")!.label, /^拆解展示/);
-  assert.match(movedOther.find((guide) => guide.id === `selected-${part.id}-elevation`)!.label, /^拆解展示离地/);
+  // 整体标注始终为"装配尺寸"，不受拆解影响
+  assert.match(movedOther.find((guide) => guide.id === "overall-x")!.label, /^装配尺寸/);
+  // 选中零件的离地标注也是"离地"
+  assert.match(movedOther.find((guide) => guide.id === `selected-${part.id}-elevation`)!.label, /^离地/);
 });
 
 test("渲染标牌直接使用共享高度与实测纹理宽高比", async () => {

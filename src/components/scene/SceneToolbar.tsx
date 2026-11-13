@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useRef, useState, type RefObject } from "react";
-import { Box, Boxes, CircleHelp, Focus, Maximize, Minimize, RotateCcw, Ruler, View, X } from "lucide-react";
+import { useState, useEffect, useRef, type RefObject } from "react";
+import { CircleHelp, Focus, Maximize, Minimize, RotateCcw, Ruler, View, X } from "lucide-react";
 import type { ViewAction } from "@/lib/scene-fit";
 import { Button } from "@/components/ui/button";
 import { IconButton } from "@/components/ui/icon-button";
@@ -30,97 +30,79 @@ const VIEWS = [
 
 export function SceneToolbar({ amount, empty, fullscreen, fullscreenSupported, fullscreenBusy, fullscreenContainer, error, showDimensions = false, onShowDimensionsChange, onAmountChange, onView, onFullscreen }: Props) {
   const [dialog, setDialog] = useState<"views" | "help" | null>(null);
-  const buttonRef = useRef<HTMLButtonElement>(null);
-  const clickTimeout = useRef<number | null>(null);
-  const touchStart = useRef<{ x: number; y: number; value: number } | null>(null);
-  const isHovering = useRef(false);
+  const [touchStart, setTouchStart] = useState<{ y: number; amount: number } | null>(null);
+  const toolbarRef = useRef<HTMLDivElement>(null);
+  const explodeButtonRef = useRef<HTMLButtonElement>(null);
 
-  // 清理 timeout
+  // PC 端滚轮微调
   useEffect(() => {
-    return () => {
-      if (clickTimeout.current !== null) {
-        clearTimeout(clickTimeout.current);
-      }
-    };
-  }, []);
+    if (empty) return;
 
-  // 单击：切换 0% 和 100%
-  // 双击：回到 0% 或 100%（取决于当前是拆还是不拆）
-  function handleClick() {
-    if (clickTimeout.current !== null) {
-      // 双击
-      clearTimeout(clickTimeout.current);
-      clickTimeout.current = null;
-      onAmountChange(amount > 0 ? 100 : 0);
-    } else {
-      // 等待可能的双击
-      // 在测试环境中，如果 setTimeout 不可用，立即执行单击
-      if (typeof setTimeout === 'undefined') {
-        onAmountChange(amount > 0 ? 0 : 100);
-      } else {
-        clickTimeout.current = setTimeout(() => {
-          clickTimeout.current = null;
-          // 单击：切换装配/拆解
-          onAmountChange(amount > 0 ? 0 : 100);
-        }, 300) as unknown as number;
-      }
-    }
-  }
-
-  // 移动端：按住滑动改变百分比
-  function handleTouchStart(event: React.TouchEvent<HTMLButtonElement>) {
-    if (event.touches.length !== 1) return;
-    const touch = event.touches[0];
-    touchStart.current = { x: touch.clientX, y: touch.clientY, value: amount };
-  }
-
-  function handleTouchMove(event: React.TouchEvent<HTMLButtonElement>) {
-    if (!touchStart.current || event.touches.length !== 1) return;
-    const touch = event.touches[0];
-    const dx = touch.clientX - touchStart.current.x;
-    const dy = touch.clientY - touchStart.current.y;
-    
-    // 检测是否移动超过阈值
-    if (Math.abs(dx) > 10 || Math.abs(dy) > 10) {
-      // 清除单击/双击定时器
-      if (clickTimeout.current) {
-        clearTimeout(clickTimeout.current);
-        clickTimeout.current = null;
-      }
+    function handleWheel(e: WheelEvent) {
+      // 仅在工具栏区域内触发
+      if (!toolbarRef.current?.contains(e.target as Node)) return;
       
-      // 水平或垂直滑动改变百分比，每 2px 改变 1%
-      const delta = Math.abs(dx) > Math.abs(dy) ? dx : -dy;
-      const newValue = Math.max(0, Math.min(100, touchStart.current.value + Math.round(delta / 2)));
-      onAmountChange(newValue);
-      event.preventDefault();
+      e.preventDefault();
+      const step = e.shiftKey ? 1 : 5; // Shift 精细调整
+      const delta = e.deltaY > 0 ? -step : step;
+      const newAmount = Math.max(0, Math.min(100, amount + delta));
+      onAmountChange(newAmount);
     }
-  }
 
-  function handleTouchEnd() {
-    touchStart.current = null;
-  }
+    const toolbar = toolbarRef.current;
+    if (!toolbar) return;
 
-  // PC端：鼠标悬停时用滚轮改变百分比
-  function handleMouseEnter() {
-    isHovering.current = true;
-  }
+    toolbar.addEventListener("wheel", handleWheel, { passive: false });
+    return () => toolbar.removeEventListener("wheel", handleWheel);
+  }, [amount, empty, onAmountChange]);
 
-  function handleMouseLeave() {
-    isHovering.current = false;
-  }
+  // 移动端触摸滑动调整
+  useEffect(() => {
+    if (empty) return;
 
-  function handleWheel(event: React.WheelEvent<HTMLButtonElement>) {
-    if (!isHovering.current || empty) return;
-    event.preventDefault();
-    const delta = event.deltaY > 0 ? -5 : 5; // 每次滚轮滚动改变 5%
-    const newValue = Math.max(0, Math.min(100, amount + delta));
-    onAmountChange(newValue);
-  }
+    function handleTouchStart(e: TouchEvent) {
+      if (!explodeButtonRef.current?.contains(e.target as Node)) return;
+      const touch = e.touches[0];
+      setTouchStart({ y: touch.clientY, amount });
+    }
+
+    function handleTouchMove(e: TouchEvent) {
+      if (!touchStart) return;
+      e.preventDefault();
+      
+      const touch = e.touches[0];
+      const deltaY = touchStart.y - touch.clientY; // 向上滑动为正
+      const step = deltaY / 2; // 2px = 1%
+      const newAmount = Math.max(0, Math.min(100, touchStart.amount + step));
+      onAmountChange(Math.round(newAmount));
+    }
+
+    function handleTouchEnd() {
+      setTouchStart(null);
+    }
+
+    const button = explodeButtonRef.current;
+    if (!button) return;
+
+    button.addEventListener("touchstart", handleTouchStart);
+    button.addEventListener("touchmove", handleTouchMove, { passive: false });
+    button.addEventListener("touchend", handleTouchEnd);
+    button.addEventListener("touchcancel", handleTouchEnd);
+
+    return () => {
+      button.removeEventListener("touchstart", handleTouchStart);
+      button.removeEventListener("touchmove", handleTouchMove);
+      button.removeEventListener("touchend", handleTouchEnd);
+      button.removeEventListener("touchcancel", handleTouchEnd);
+    };
+  }, [amount, empty, touchStart, onAmountChange]);
+
+  const explodeScale = 1 - amount / 100 * 0.28;
 
   return (
     <>
-      <div role="group" aria-label="3D 视图工具栏" className="scene-tools">
-        <div className="flex min-w-0 flex-wrap items-center justify-between gap-2">
+      <div ref={toolbarRef} role="group" aria-label="3D 视图工具栏" className="scene-tools">
+        <div className="flex min-w-0 flex-wrap items-center gap-2">
           <div role="group" aria-label="视图操作" className="flex items-center gap-1">
             <IconButton label="视角" title="切换观察方向" aria-haspopup="dialog" onClick={() => setDialog("views")}><View className="size-4" /></IconButton>
             <IconButton label="适应视图" title="适应当前展示并重新居中，保留观察方向" onClick={() => onView("fit")}><Focus className="size-4" /></IconButton>
@@ -134,25 +116,21 @@ export function SceneToolbar({ amount, empty, fullscreen, fullscreenSupported, f
             <IconButton className="scene-extended-control" label="坐标与拆解说明" aria-haspopup="dialog" onClick={() => setDialog("help")}><CircleHelp className="size-4" /></IconButton>
           </div>
           <div role="group" aria-label="结构展示" className="flex min-w-0 items-center gap-1">
-            <Button
-              ref={buttonRef}
-              variant={amount > 0 ? "secondary" : "ghost"}
-              size={amount > 0 ? "touch" : "icon-touch"}
-              className={amount > 0 ? "min-h-[var(--control-height)] gap-1 px-2.5 font-mono text-xs tabular-nums" : "size-[var(--control-icon-size)] p-0"}
+            <IconButton
+              ref={explodeButtonRef}
+              label={amount === 0 ? "拆解" : "装配"}
+              title={`当前拆解 ${amount}% · 点击${amount > 0 ? "恢复装配" : "完全拆解"}${empty ? "" : " · 滚轮微调，Shift 精调 · 上下滑动调整"}`}
+              active={amount > 0}
               disabled={empty}
-              onClick={handleClick}
-              onTouchStart={handleTouchStart}
-              onTouchMove={handleTouchMove}
-              onTouchEnd={handleTouchEnd}
-              onMouseEnter={handleMouseEnter}
-              onMouseLeave={handleMouseLeave}
-              onWheel={handleWheel}
-              aria-label={amount === 100 ? "恢复装配" : amount > 0 ? `当前分离 ${amount}%` : "拆解"}
-              title={amount === 100 ? "点击：恢复装配 · 双击：保持完全拆解 · 滚轮或滑动：调整" : amount > 0 ? `点击：完全拆解 · 双击：恢复装配 · 滚轮或滑动：调整` : "点击：拆解 · 滚轮或滑动：调整"}
+              onClick={() => onAmountChange(amount > 0 ? 0 : 100)}
+              data-testid="explode-button"
             >
-              {amount === 100 ? <Boxes className="size-4 shrink-0" /> : <Box className="size-4 shrink-0" />}
-              {amount > 0 && <span>{amount}%</span>}
-            </Button>
+              <svg className="scene-explode-icon size-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={4 / 3} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" focusable="false">
+                <path d="M12 2 22 7 12 12 2 7Z" vectorEffect="non-scaling-stroke" style={{ transformOrigin: "12px 2px", transform: `scale(${explodeScale})` }} />
+                <path d="M2 7 12 12 12 22 2 17Z" vectorEffect="non-scaling-stroke" style={{ transformOrigin: "2px 22px", transform: `scale(${explodeScale})` }} />
+                <path d="M12 12 22 7 22 17 12 22Z" vectorEffect="non-scaling-stroke" style={{ transformOrigin: "22px 22px", transform: `scale(${explodeScale})` }} />
+              </svg>
+            </IconButton>
           </div>
         </div>
         {error && <p role="alert" className="text-xs leading-relaxed text-destructive">{error}</p>}

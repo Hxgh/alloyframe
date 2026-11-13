@@ -3,7 +3,7 @@
 import dynamic from "next/dynamic";
 import { useTheme } from "next-themes";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type MouseEvent, type ReactNode, type TouchEvent } from "react";
-import { ChevronDown, ChevronUp, Copy, FlipHorizontal2, Pencil, Plus, Trash2, X } from "lucide-react";
+import { ChevronDown, ChevronLeft, ChevronRight, ChevronUp, ClipboardList, Copy, FlipHorizontal2, Package, Pencil, Plus, Settings, Trash2, X } from "lucide-react";
 import type { AccessoryCatalog, Catalog, Design, Part } from "@/lib/schema";
 import { explodeOffsets } from "@/lib/explode";
 import { createFullscreenController } from "@/lib/fullscreen";
@@ -11,6 +11,7 @@ import { PartsList } from "@/components/panel/PartsList";
 import { BomPanel } from "@/components/panel/BomPanel";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
+import { IconButton } from "@/components/ui/icon-button";
 import { Header } from "@/components/Header";
 import { ProjectToolbar } from "@/components/project/ProjectToolbar";
 import { SceneToolbar } from "@/components/scene/SceneToolbar";
@@ -371,11 +372,26 @@ export function Workspace({ design, catalog, accessoryCatalog, project }: Props)
                   event.stopPropagation();
                 }
               }}
+              onDoubleClick={(event) => {
+                // 桌面端支持双击标签栏空白处折叠/展开
+                if (!isMobile && event.target instanceof HTMLElement && event.target.closest('.panel-toolbar') === panelTabs.current) {
+                  if (panelOpen) closePanel(); else openPanel();
+                }
+              }}
             >
               <TabsList variant="line" className="panel-tab-list min-w-0 flex-1">
-                <TabsTrigger value="parts" aria-expanded={panelOpen && activeTab === "parts"} onClick={() => activateCurrentTab("parts")}>零件</TabsTrigger>
-                <TabsTrigger value="bom" aria-expanded={panelOpen && activeTab === "bom"} onClick={() => activateCurrentTab("bom")}>算料</TabsTrigger>
-                <TabsTrigger value="project" aria-expanded={panelOpen && activeTab === "project"} onClick={() => activateCurrentTab("project")}>项目</TabsTrigger>
+                <TabsTrigger value="parts" aria-expanded={panelOpen && activeTab === "parts"} onClick={() => activateCurrentTab("parts")}>
+                  <Package className="size-4" />
+                  <span className="panel-tab-label">零件</span>
+                </TabsTrigger>
+                <TabsTrigger value="bom" aria-expanded={panelOpen && activeTab === "bom"} onClick={() => activateCurrentTab("bom")}>
+                  <ClipboardList className="size-4" />
+                  <span className="panel-tab-label">算料</span>
+                </TabsTrigger>
+                <TabsTrigger value="project" aria-expanded={panelOpen && activeTab === "project"} onClick={() => activateCurrentTab("project")}>
+                  <Settings className="size-4" />
+                  <span className="panel-tab-label">项目</span>
+                </TabsTrigger>
               </TabsList>
               <Button
                 variant="ghost"
@@ -386,9 +402,29 @@ export function Workspace({ design, catalog, accessoryCatalog, project }: Props)
                 title={panelOpen ? "收起面板" : "展开面板"}
                 onClick={() => { if (panelOpen) closePanel(); else openPanel(); }}
               >
-                {panelOpen ? <ChevronDown className="panel-toggle-icon size-4" /> : <ChevronUp className="panel-toggle-icon size-4" />}
+                {isMobile ? (
+                  panelOpen ? <ChevronDown className="panel-toggle-icon size-4" /> : <ChevronUp className="panel-toggle-icon size-4" />
+                ) : (
+                  panelOpen ? <ChevronRight className="panel-toggle-icon size-4" /> : <ChevronLeft className="panel-toggle-icon size-4" />
+                )}
               </Button>
             </div>
+            {/* A3: 折叠状态快捷操作 - 仅桌面端显示 */}
+            {!isMobile && !panelOpen && (
+              <div className="panel-quick-actions flex flex-col gap-1 border-t border-border p-2">
+                <IconButton 
+                  label="添加零件" 
+                  disabled={project.readOnly || project.invalid || Boolean(editing)}
+                  onClick={() => { 
+                    setEditing("new"); 
+                    setActiveTab("parts"); 
+                    openPanel(); 
+                  }}
+                >
+                  <Plus className="size-4" />
+                </IconButton>
+              </div>
+            )}
             <div ref={panelContent} id="workspace-panel-content" hidden={!panelOpen} className="min-h-0 min-w-0 flex-1">
               <TabsContent value="parts" keepMounted hidden={activeTab !== "parts"} className="h-full min-h-0 overflow-hidden">
                 {editing ? <PartEditor
