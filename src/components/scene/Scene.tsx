@@ -4,8 +4,8 @@ import { Suspense, useEffect, useMemo, useRef, useSyncExternalStore, type Compon
 import { Canvas, useThree } from "@react-three/fiber";
 import { Environment, GizmoHelper, GizmoViewport, Lightformer, OrbitControls } from "@react-three/drei";
 import { PCFShadowMap, PerspectiveCamera } from "three";
-import type { Catalog, Design } from "@/lib/schema";
-import { designBounds } from "@/lib/tslot";
+import type { AccessoryCatalog, Catalog, Design } from "@/lib/schema";
+import { displayedDesignBounds, resolveAccessoryInstances } from "@/lib/accessory-connections";
 import { explodeOffsets } from "@/lib/explode";
 import { applyViewFrame, boundsWithGuides, cameraBounds, combineBounds, frameRequest, frameView, visibleBoundsDistance, type SceneBounds, type Vec3, type ViewRequest, type ViewState } from "@/lib/scene-fit";
 import { buildDimensionGuides } from "@/lib/scene-dimensions";
@@ -13,10 +13,12 @@ import { createTapGesture, isSelectionClick } from "@/lib/tap-gesture";
 import { sceneControls } from "@/lib/scene-controls";
 import { PartMesh } from "./PartMesh";
 import { SceneDimensions } from "./SceneDimensions";
+import { AccessoryMesh } from "./AccessoryMesh";
 
 type Props = {
   design: Design;
   catalog: Catalog;
+  accessories?: AccessoryCatalog;
   selectedId: string | null;
   explodeAmount: number;
   offsets: Map<string, [number, number, number]>;
@@ -114,19 +116,20 @@ function Rig({ bounds, activeBounds, viewRequest, showDimensions }: { bounds: Sc
   return <OrbitControls ref={controls} makeDefault {...sceneControls} />;
 }
 
-export function Scene({ design, catalog, selectedId, explodeAmount, offsets, viewRequest, showGrid, showDimensions = false, dark, onSelect }: Props) {
+export function Scene({ design, catalog, accessories, selectedId, explodeAmount, offsets, viewRequest, showGrid, showDimensions = false, dark, onSelect }: Props) {
   const profileMap = useMemo(() => new Map(catalog.profiles.map((p) => [p.id, p])), [catalog]);
+  const accessoryInstances = useMemo(() => resolveAccessoryInstances(design, accessories, offsets), [design, accessories, offsets]);
   const bounds = useMemo(() => {
-    const assembled = designBounds(design.parts);
-    const exploded = designBounds(design.parts, explodeOffsets(design.parts, 1));
+    const assembled = displayedDesignBounds(design, accessories);
+    const exploded = displayedDesignBounds(design, accessories, explodeOffsets(design.parts, 1));
     return combineBounds(assembled, exploded);
-  }, [design.parts]);
+  }, [design, accessories]);
   const activeBounds = useMemo(() => {
-    const actual = cameraBounds(designBounds(design.parts, offsets), design.parts.length === 0);
+    const actual = cameraBounds(displayedDesignBounds(design, accessories, offsets), design.parts.length === 0);
     return showDimensions
       ? boundsWithGuides(actual, buildDimensionGuides(design.parts, selectedId, offsets))
       : actual;
-  }, [design.parts, offsets, selectedId, showDimensions]);
+  }, [design, accessories, offsets, selectedId, showDimensions]);
   const gesture = useMemo(() => createTapGesture(), []);
   useEffect(() => {
     // OrbitControls 允许拖出画布继续操作；结束清理也必须覆盖 document。
@@ -204,6 +207,8 @@ export function Scene({ design, catalog, selectedId, explodeAmount, offsets, vie
             onSelect={selectIfTap}
           />
         ))}
+
+        {accessoryInstances.map((item) => <AccessoryMesh key={item.instance.id} item={item} selectedId={selectedId} dark={dark} onSelect={selectIfTap} />)}
 
         {showDimensions && (
           <SceneDimensions
