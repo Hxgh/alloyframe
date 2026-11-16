@@ -1,12 +1,12 @@
 import fs from "node:fs";
 import path from "node:path";
 import { CatalogSchema, AccessoryCatalogSchema, DesignSchema, validateReferences } from "@/lib/schema";
-import { getDataRoot } from "@/lib/project-store";
+import { getDataRoot } from "@/lib/data-root";
 import type { AccessoryCatalog, Catalog, Design } from "@/lib/schema";
 
 /**
- * 数据加载。V1 不走数据库 —— design.json 就是唯一真相源，
- * 由人（编辑器）或 Agent（直接写文件）维护，git 提交即版本管理。
+ * 数据加载。V1 不走数据库 —— 运行数据目录中的 design.json 是唯一真相源，
+ * 由人（编辑器）或 Agent（直接写文件）维护；备份与版本管理由使用者负责。
  *
  * 全部在服务端读取，客户端拿到的已是校验过的对象。
  * ALLOYFRAME_DATA_DIR 可指定绝对数据目录，由 getDataRoot 统一解析。

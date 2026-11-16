@@ -7,7 +7,7 @@ import { AccessoryCatalogSchema, CatalogSchema, DesignSchema } from "../schema";
 import { inspectDesign } from "../validation";
 import { designBounds } from "../tslot";
 import { explodeOffsets } from "../explode";
-import { bomCsv, buildBom, cutListCsv } from "../bom";
+import { bomCsv, buildBom, cutListCsv, type BomResult } from "../bom";
 
 const catalog = CatalogSchema.parse(catalogJson);
 const accessories = AccessoryCatalogSchema.parse(accessoriesJson);
@@ -154,6 +154,177 @@ test("BOM massKg 始终是行总重，两个 CSV 单重除数量且总重不再�
   assert.deepEqual(cutListCsv(bom).split("\n")[1].split(",").slice(2, 5), ["2", "2.000", "4.000"]);
   assert.deepEqual(bomCsv(bom).split("\n")[1].split(",").slice(5, 7), ["2.000", "4.000"]);
 });
+
+test("BOM 和切割清单对不可信文本列中和公式前缀，数值列不受影响", () => {
+  const inputs = [
+    "=1+1", "+SUM(1,2)", "-10", "@SUM(1,2)",
+    "  =1+1", "  +1", "  -1", "  @cmd", "\t+1", "\r-1", "\n@cmd",
+    "\u0000=1", "\u001f+1", "\u007f-1", "\u0085@cmd", "\u00a0=1", "\ufeff+1", "\u2003@cmd",
+    " \u0000=1", " \u001f+1", " \u007f-1", " \u0085@cmd", "\u00a0\u0000=1", "\ufeff\u007f@cmd",
+    "\t普通文本", "\r普通文本", "\n普通文本", "\u0000普通文本", "\u007f普通文本", "\u0085普通文本",
+    " \t普通文本", " \r普通文本", " \n普通文本", " \u0000普通文本", " \u001f普通文本", " \u007f普通文本", " \u0085普通文本",
+    '  ="a,b"\r\n第二行', '前缀,=1\n"另一行"', "单独\r回车", "普通文本", "  普通文本", " \u00a0", "", "+",
+  ];
+  const neutralized = [
+    "'=1+1", "'+SUM(1,2)", "'-10", "'@SUM(1,2)",
+    "'  =1+1", "'  +1", "'  -1", "'  @cmd", "'\t+1", "'\r-1", "'\n@cmd",
+    "'\u0000=1", "'\u001f+1", "'\u007f-1", "'\u0085@cmd", "'\u00a0=1", "'\ufeff+1", "'\u2003@cmd",
+    "' \u0000=1", "' \u001f+1", "' \u007f-1", "' \u0085@cmd", "'\u00a0\u0000=1", "'\ufeff\u007f@cmd",
+    "'\t普通文本", "'\r普通文本", "'\n普通文本", "'\u0000普通文本", "'\u007f普通文本", "'\u0085普通文本",
+    "' \t普通文本", "' \r普通文本", "' \n普通文本", "' \u0000普通文本", "' \u001f普通文本", "' \u007f普通文本", "' \u0085普通文本",
+    `'  ="a,b"\r\n第二行`, '前缀,=1\n"另一行"', "单独\r回车", "普通文本", "  普通文本", " \u00a0", "", "'+",
+  ];
+  const bom: BomResult = {
+    lines: inputs.map((value, index) => ({
+      key: String(index), category: "型材", label: value, spec: value, lengthMm: index + 1,
+      qty: -2, unit: value, massKg: -4, unitPrice: -3.25, lineTotal: -6.5, note: value,
+    })),
+    profileLengthM: 0, totalMassKg: 0, knownTotal: 0, hasUnknownPrice: false, currency: "CNY",
+  };
+
+  // 使用转义序列覆盖不可见字符，而不在源码中嵌入控制字符。
+  const bomSnapshot = structuredClone(bom);
+  const fullRows = parseCsvForTest(bomCsv(bom));
+  assert.deepEqual(fullRows[0], ["分类", "名称", "规格", "数量", "单位", "单重(kg)", "总重(kg)", "单价", "小计", "备注"]);
+  assert.deepEqual(fullRows.slice(1), neutralized.map((value) => [
+    "型材", value, value, "-2", value, "2.000", "-4.000", "-3.25", "-6.50", value,
+  ]));
+
+  const cutRows = parseCsvForTest(cutListCsv(bom));
+  assert.deepEqual(cutRows[0], ["型材规格", "下料长度(mm)", "数量", "单重(kg)", "总重(kg)", "备注"]);
+  assert.deepEqual(cutRows.slice(1), neutralized.map((value, index) => [
+    value, String(index + 1), "-2", "2.000", "-4.000", value,
+  ]).reverse());
+  assert.deepEqual(bom, bomSnapshot);
+
+  for (const code of [...Array(0x20).keys(), ...Array.from({ length: 0x21 }, (_, index) => index + 0x7f)]) {
+    const value = ` \u00a0${String.fromCharCode(code)}普通文本`;
+    const line = { ...bom.lines[0], label: value, spec: value, unit: value, note: value };
+    const controlBom: BomResult = { ...bom, lines: [line] };
+    const full = parseCsvForTest(bomCsv(controlBom))[1];
+    assert.deepEqual([full[1], full[2], full[4], full[9]], Array(4).fill(`'${value}`));
+    const cut = parseCsvForTest(cutListCsv(controlBom))[1];
+    assert.deepEqual([cut[0], cut[5]], Array(2).fill(`'${value}`));
+  }
+});
+
+test("CSV 数值列中的负号与可选空值不被文本中和", () => {
+  const bom: BomResult = {
+    lines: [
+      { key: "beam", category: "型材", label: "型材", spec: "规格", lengthMm: -100, qty: 2, unit: "支", massKg: -4, unitPrice: -3.25, lineTotal: -6.5 },
+      { key: "plate", category: "板材", label: "板材", spec: "规格", qty: 1, unit: "块", massKg: 0 },
+    ],
+    profileLengthM: 0, totalMassKg: -4, knownTotal: -6.5, hasUnknownPrice: true, currency: "CNY",
+  };
+  assert.deepEqual(parseCsvForTest(cutListCsv(bom)).slice(1), [["型材", "-100", "2", "-2.000", "-4.000", ""]]);
+  assert.deepEqual(parseCsvForTest(bomCsv(bom)).slice(1), [
+    ["型材", "型材", "规格", "2", "支", "-2.000", "-4.000", "-3.25", "-6.50", ""],
+    ["板材", "板材", "规格", "1", "块", "0.000", "0.000", "", "", ""],
+  ]);
+});
+
+test("CSV 保留备注、分隔符与换行并使用标准引号转义", () => {
+  const note = '说明,"加固"\r\n第二行\r第三行';
+  const bom: BomResult = {
+    lines: [{ key: "beam", category: "型材", label: '型材,"规格"', spec: "规格\r参数", lengthMm: 1000, qty: 2, unit: "支", massKg: 4, note }],
+    profileLengthM: 2, totalMassKg: 4, knownTotal: 0, hasUnknownPrice: true, currency: "CNY",
+  };
+  assert.equal(cutListCsv(bom), '型材规格,下料长度(mm),数量,单重(kg),总重(kg),备注\n"型材,""规格""",1000,2,2.000,4.000,"说明,""加固""\r\n第二行\r第三行"');
+  assert.equal(bomCsv(bom), '分类,名称,规格,数量,单位,单重(kg),总重(kg),单价,小计,备注\n型材,"型材,""规格""","规格\r参数",2,支,2.000,4.000,,,"说明,""加固""\r\n第二行\r第三行"');
+
+  // 中和必须发生在 CSV 编码之前，不能让公式中的引号或分隔符生成新单元格。
+  const riskyText = '=HYPERLINK("url","label")\r\n第二行';
+  const riskyBom: BomResult = {
+    ...bom,
+    lines: [{ ...bom.lines[0], label: riskyText, spec: riskyText, unit: riskyText, note: riskyText }],
+  };
+  const encoded = `"'=HYPERLINK(""url"",""label"")\r\n第二行"`;
+  assert.equal(cutListCsv(riskyBom), `型材规格,下料长度(mm),数量,单重(kg),总重(kg),备注\n${encoded},1000,2,2.000,4.000,${encoded}`);
+  assert.equal(bomCsv(riskyBom), `分类,名称,规格,数量,单位,单重(kg),总重(kg),单价,小计,备注\n型材,${encoded},${encoded},2,${encoded},2.000,4.000,,,${encoded}`);
+
+  const breakout = '",=1\r\n+2,"';
+  const breakoutBom: BomResult = {
+    ...bom,
+    lines: [{ ...bom.lines[0], label: breakout, spec: breakout, unit: breakout, note: breakout }],
+  };
+  const csvBreakout = '""",=1\r\n+2,"""';
+  assert.equal(cutListCsv(breakoutBom), `型材规格,下料长度(mm),数量,单重(kg),总重(kg),备注\n${csvBreakout},1000,2,2.000,4.000,${csvBreakout}`);
+  assert.equal(bomCsv(breakoutBom), `分类,名称,规格,数量,单位,单重(kg),总重(kg),单价,小计,备注\n型材,${csvBreakout},${csvBreakout},2,${csvBreakout},2.000,4.000,,,${csvBreakout}`);
+  assert.deepEqual(parseCsvForTest(cutListCsv(breakoutBom))[1], [breakout, "1000", "2", "2.000", "4.000", breakout]);
+  assert.deepEqual(parseCsvForTest(bomCsv(breakoutBom))[1], ["型材", breakout, breakout, "2", breakout, "2.000", "4.000", "", "", breakout]);
+});
+
+test("完整算料单的分类也是文本列", () => {
+  // 运行时传入的外部数据不一定遵守 TypeScript 的联合类型。
+  const category = ' =SUM(1,2)' as BomResult["lines"][number]["category"];
+  const bom: BomResult = {
+    lines: [{ key: "category", category, label: "名称", spec: "规格", qty: 1, unit: "件", massKg: 1 }],
+    profileLengthM: 0, totalMassKg: 1, knownTotal: 0, hasUnknownPrice: true, currency: "CNY",
+  };
+  assert.equal(parseCsvForTest(bomCsv(bom))[1][0], "' =SUM(1,2)");
+});
+
+test("设计和目录输入的文本在两种 CSV 中分别中和", () => {
+  const profile = { ...catalog.profiles[0], id: "=profile", name: "=型材" };
+  const accessory = { ...accessories.accessories[0], id: "csv-test", name: "+配件", category: "-类别", unit: "@单位", note: "=目录备注" };
+  const input = DesignSchema.parse({
+    ...empty,
+    parts: [
+      { id: "beam", kind: "beam", role: "梁", profile: profile.id, material: "铝", size: [1000, 40, 40], position: [0, 100, 0], massKg: 2, note: "\t=设计备注" },
+      { id: "plate", kind: "plate", role: "@台面", material: "木", size: [100, 20, 40], position: [0, 100, 0], note: "+板材备注" },
+    ],
+    accessories: [{ ref: accessory.id, qty: 2 }],
+  });
+  const bom = buildBom(input, { ...catalog, profiles: [profile] }, { ...accessories, accessories: [accessory] });
+  const rows = parseCsvForTest(bomCsv(bom));
+  assert.equal(rows[1][1], "'=型材");
+  assert.equal(rows[1][2], "'=profile · 1000mm");
+  assert.equal(rows[1][9], "'\t=设计备注");
+  assert.equal(rows[2][1], "'@台面");
+  assert.equal(rows[2][9], "'+板材备注");
+  assert.deepEqual([rows[3][1], rows[3][2], rows[3][4], rows[3][9]], ["'+配件", "'-类别", "'@单位", "'=目录备注"]);
+  const cutRows = parseCsvForTest(cutListCsv(bom));
+  assert.deepEqual([cutRows[1][0], cutRows[1][5]], ["'=型材", "'\t=设计备注"]);
+});
+
+/** 解析测试中的 CSV；确保换行与引号不会打断字段或行。 */
+function parseCsvForTest(csv: string): string[][] {
+  const rows: string[][] = [];
+  let row: string[] = [];
+  let field = "";
+  let quoted = false;
+  for (let i = 0; i < csv.length; i++) {
+    const char = csv[i];
+    if (quoted) {
+      if (char === '"' && csv[i + 1] === '"') {
+        field += '"';
+        i++;
+      } else if (char === '"') {
+        quoted = false;
+      } else {
+        field += char;
+      }
+    } else if (char === '"') {
+      assert.equal(field, "", "引号必须位于字段开头");
+      quoted = true;
+    } else if (char === ",") {
+      row.push(field);
+      field = "";
+    } else if (char === "\n") {
+      row.push(field);
+      rows.push(row);
+      row = [];
+      field = "";
+    } else {
+      assert.notEqual(char, "\r", "未转义的回车会破坏 CSV 行");
+      field += char;
+    }
+  }
+  assert.equal(quoted, false, "引号必须闭合");
+  row.push(field);
+  rows.push(row);
+  return rows;
+}
 
 test("空间防呆检查：型材未做端头扣减产生干涉警告，悬空构件产生悬空警告，同心套管柱豁免", () => {
   const overlappingBeams = inspect({

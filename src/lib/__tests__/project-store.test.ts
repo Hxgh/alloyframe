@@ -9,6 +9,7 @@ import accessoriesJson from "../../../data/catalog/accessories.json";
 import designJson from "../../../data/designs/standing-desk.json";
 import { AccessoryCatalogSchema, CatalogSchema, IdSchema } from "../schema";
 import { createProject, createProjectStore, getDataRoot, getStoreWritable, ProjectStoreError } from "../project-store";
+import { initializeDataRoot } from "../data-root";
 
 beforeEach((t) => {
   const keys = ["ALLOYFRAME_DATA_DIR", "ALLOYFRAME_READ_ONLY", "ALLOYFRAME_TRUSTED_ORIGINS",
@@ -254,7 +255,7 @@ test("默认 catalog 读取同 root/catalog，ALLOYFRAME_DATA_DIR 必须绝对�
 
 test("数据目录默认值、旧名兼容和新名优先；显式新空值或相对路径返回400且不写入", async (t) => {
   const { root } = await fixture(t);
-  assert.equal(getDataRoot(), path.join(process.cwd(), "data"));
+  assert.equal(getDataRoot(), path.join(process.cwd(), ".alloyframe-data"));
   process.env.SUNMAO_DATA_DIR = path.join(root, "legacy");
   assert.equal(getDataRoot(), process.env.SUNMAO_DATA_DIR);
   process.env.ALLOYFRAME_DATA_DIR = path.join(root, "current");
@@ -266,6 +267,48 @@ test("数据目录默认值、旧名兼容和新名优先；显式新空值或�
       && error instanceof ProjectStoreError && /ALLOYFRAME_DATA_DIR/.test(error.message));
   }
   assert.deepEqual(await fs.readdir(root), []);
+});
+
+test("默认数据初始化不覆盖现有文件，也不会恢复已删除或归档的示例", async (t) => {
+  const { root } = await fixture(t);
+  const local = path.join(root, "local");
+  await fs.mkdir(path.join(local, "designs"), { recursive: true });
+  await fs.mkdir(path.join(local, "archive"));
+  await fs.writeFile(path.join(local, "designs/workbench-i8.json"), "existing design");
+  await fs.writeFile(path.join(local, "archive/private.json"), "private archive");
+
+  initializeDataRoot(local, path.join(repo, "data"));
+  assert.equal(await fs.readFile(path.join(local, "designs/workbench-i8.json"), "utf8"), "existing design");
+  assert.equal(await fs.readFile(path.join(local, "archive/private.json"), "utf8"), "private archive");
+  assert.deepEqual(JSON.parse(await fs.readFile(path.join(local, "catalog/profiles.json"), "utf8")), catalogJson);
+  assert.ok((await fs.readdir(path.join(local, "designs"))).includes("shelf-i8.json"));
+  await fs.unlink(path.join(local, "designs/shelf-i8.json"));
+  initializeDataRoot(local, path.join(repo, "data"));
+  await assert.rejects(fs.access(path.join(local, "designs/shelf-i8.json")), { code: "ENOENT" });
+});
+
+test("默认数据初始化不跟随目录或标记符号链接", async (t) => {
+  const { root } = await fixture(t);
+  const outside = path.join(root, "outside");
+  const local = path.join(root, "local");
+  await fs.mkdir(outside);
+  await fs.mkdir(local);
+  await fs.symlink(outside, path.join(local, "designs"));
+  assert.throws(() => initializeDataRoot(local, path.join(repo, "data")), status(403));
+  assert.deepEqual(await fs.readdir(outside), []);
+  await fs.unlink(path.join(local, "designs"));
+  await fs.symlink(path.join(repo, "data/design.schema.json"), path.join(local, ".initialized"));
+  assert.throws(() => initializeDataRoot(local, path.join(repo, "data")), status(403));
+});
+
+test("项目摘要不向客户端暴露文件系统绝对路径", async (t) => {
+  const { root, store } = await fixture(t);
+  await fs.mkdir(path.join(root, "designs"));
+  await fs.symlink(path.join(root, "missing"), path.join(root, "designs/link.json"));
+  const summary = (await store.getProjectLibrary()).projects[0];
+  assert.equal(summary.status, "invalid");
+  assert.equal(summary.error, "无法读取项目");
+  assert.doesNotMatch(summary.error, new RegExp(root.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
 });
 
 test("旧只读变量可回退，新0或空值覆盖旧1；显式 root 与只读 store 仍受尊重", async (t) => {

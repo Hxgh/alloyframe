@@ -150,12 +150,12 @@ export function cutListCsv(bom: BomResult): string {
 
   const header = ["型材规格", "下料长度(mm)", "数量", "单重(kg)", "总重(kg)", "备注"];
   const body = rows.map((r) => [
-    r.label,
+    neutralizeCsvText(r.label),
     String(r.lengthMm ?? ""),
     String(r.qty),
     (r.massKg / r.qty).toFixed(3),
     r.massKg.toFixed(3),
-    (r.note ?? "").replace(/[",\n]/g, " "),
+    neutralizeCsvText(r.note ?? ""),
   ]);
 
   return [header, ...body].map((r) => r.map(escapeCsv).join(",")).join("\n");
@@ -165,21 +165,36 @@ export function cutListCsv(bom: BomResult): string {
 export function bomCsv(bom: BomResult): string {
   const header = ["分类", "名称", "规格", "数量", "单位", "单重(kg)", "总重(kg)", "单价", "小计", "备注"];
   const body = bom.lines.map((l) => [
-    l.category,
-    l.label,
-    l.spec,
+    neutralizeCsvText(l.category),
+    neutralizeCsvText(l.label),
+    neutralizeCsvText(l.spec),
     String(l.qty),
-    l.unit,
+    neutralizeCsvText(l.unit),
     (l.massKg / l.qty).toFixed(3),
     l.massKg.toFixed(3),
     l.unitPrice != null ? l.unitPrice.toFixed(2) : "",
     l.lineTotal != null ? l.lineTotal.toFixed(2) : "",
-    (l.note ?? "").replace(/[",\n]/g, " "),
+    neutralizeCsvText(l.note ?? ""),
   ]);
   return [header, ...body].map((r) => r.map(escapeCsv).join(",")).join("\n");
 }
 
+/**
+ * 仅对文本列添加单引号前缀，数值列保留数值语义。
+ * 这是降低 CSV 公式注入风险的措施，不保证所有电子表格及重新保存后的行为一致。
+ */
+function neutralizeCsvText(value: string): string {
+  for (const char of value) {
+    const code = char.charCodeAt(0);
+    if (code <= 0x1f || (code >= 0x7f && code <= 0x9f) || "=+-@".includes(char)) {
+      return `'${value}`;
+    }
+    if (!/\s/u.test(char)) break;
+  }
+  return value;
+}
+
 function escapeCsv(value: string): string {
-  if (/[",\n]/.test(value)) return `"${value.replace(/"/g, '""')}"`;
+  if (/[",\r\n]/.test(value)) return `"${value.replace(/"/g, '""')}"`;
   return value;
 }

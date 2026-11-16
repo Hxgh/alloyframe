@@ -24,7 +24,7 @@ function devResource(host: string, url: string, mode = "cors", site = "same-orig
 }
 
 test("任意私有网段和 mDNS 开发地址都能加载客户端脚本、字体和热更新", () => {
-  // 覆盖家用 192.168、手机热点 172.20、常见 10.x、链路本地与 *.local，不再依赖具体地址。
+  // 使用虚构地址覆盖 192.168、172.20、10.x、链路本地与 *.local。
   for (const host of ["192.168.254.101", "192.168.253.102", "10.254.253.101", "10.253.252.102", "172.20.254.103", "169.254.254.104", "example-device.local"]) {
     for (const url of ["/_next/static/chunks/scene.js", "/__nextjs_font/geist-latin.woff2", "/_next/hmr"]) {
       assert.deepEqual(devResource(host, url), { blocked: false, status: 200 }, `${host}${url}`);
@@ -38,7 +38,7 @@ test("开发资源许可不写死个人地址，也不放行公网来源", (t) =
   for (const entry of nextConfig.allowedDevOrigins ?? []) {
     assert.doesNotMatch(entry, /^\d+\.\d+\.\d+\.\d+$/, `不应写死具体 IP：${entry}`);
   }
-  for (const host of ["untrusted.example", "203.0.113.9", "8.8.8.8"]) {
+  for (const host of ["untrusted.example", "203.0.113.9", "198.51.100.99"]) {
     assert.deepEqual(devResource(host, "/_next/static/chunks/scene.js"), { blocked: true, status: 403 }, host);
     assert.deepEqual(devResource(host, "/_next/static/chunks/scene.js", "no-cors", "cross-site"), { blocked: true, status: 403 }, host);
   }

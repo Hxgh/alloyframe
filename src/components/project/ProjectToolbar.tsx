@@ -70,7 +70,7 @@ export function ProjectToolbar({ id, status, savedAt, saving, canSave, canUndo =
           <details className="group text-sm leading-relaxed">
             <summary className="flex min-h-[var(--control-height)] cursor-pointer items-center gap-2 rounded-lg px-2 text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50 dark:hover:bg-muted/50"><FileJson aria-hidden="true" className="size-4" />保存与文件说明<ChevronDown aria-hidden="true" className="ml-auto size-4 transition-transform group-open:rotate-180 motion-reduce:transition-none" /></summary>
             <section className="space-y-2 pt-2" aria-label="保存机制说明">
-              <p>正式位置：服务端数据根中的 <code className="break-all">designs/{id}.json</code>。从项目根启动时默认使用 <code>data/</code>；部署者可通过 <code>ALLOYFRAME_DATA_DIR</code> 指定外部目录。{savedAt && <span className="block text-muted-foreground">上次文件保存：{savedAt}</span>}</p>
+              <p>正式位置：服务端数据根中的 <code className="break-all">designs/{id}.json</code>。从项目根启动时默认使用被 Git 忽略的 <code>.alloyframe-data/</code>；部署者可通过 <code>ALLOYFRAME_DATA_DIR</code> 指定其他目录。{savedAt && <span className="block text-muted-foreground">上次文件保存：{savedAt}</span>}</p>
               <p>自动保存开启时，有效且已应用的草稿停止编辑 1.5 秒后写入正式文件；未应用的表单和无效 JSON 不会写入。文件冲突或保存失败时暂停，需处理冲突或手动重试。</p>
               <p className="text-muted-foreground">浏览器仅额外备份 JSON 草稿，不跨设备同步，也不含未应用表单。自动保存不是版本历史；“放弃修改”只能放弃上次成功保存后的草稿。归档和放弃在「项目」面板中。</p>
               <p className="text-muted-foreground">视图与主题设置不改变设计。</p>

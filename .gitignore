@@ -30,8 +30,16 @@ yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
 
-# env files (can opt-in for committing if needed)
+# local data and credentials
+/.alloyframe-data/
+/data/archive/
 .env*
+*.key
+*.p12
+*.pfx
+*.sqlite
+*.sqlite3
+.npmrc
 
 # vercel
 .vercel

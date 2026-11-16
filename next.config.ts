@@ -5,6 +5,13 @@ const nextConfig: NextConfig = {
   cacheComponents: true,
   partialPrefetching: true,
   reactCompiler: true,
+  // 本地项目与归档不能进入生产文件追踪；只打包公开的初始化数据。
+  outputFileTracingExcludes: {
+    "/*": [".alloyframe-data/**/*", "data/archive/**/*"],
+  },
+  outputFileTracingIncludes: {
+    "/*": ["data/design.schema.json", "data/catalog/*.json", "data/designs/*.json"],
+  },
   // 开发资源默认只放行 localhost。这里按私有网段放行，换 Wi-Fi / 热点无需再改地址；
   // 通配符只匹配域名标签，写 "*" 或 "**" 反而会拦掉局域网 IP。
   allowedDevOrigins: ["10.*.*.*", "172.*.*.*", "192.168.*.*", "169.254.*.*", "*.local"],

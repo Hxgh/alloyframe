@@ -251,7 +251,7 @@ test("项目文件说明默认折叠，保留路径及保存风险", async () =>
   const details = text.match(/<details\b[\s\S]*?<\/details>/)?.[0];
   assert.ok(details);
   assert.match(details, /designs\/\{id\}\.json/);
-  for (const rule of ["ALLOYFRAME_DATA_DIR", "1.5 秒", "未应用的表单和无效 JSON 不会写入", "文件冲突或保存失败时暂停", "浏览器仅额外备份 JSON 草稿", "自动保存不是版本历史", "视图与主题设置不改变设计"]) {
+  for (const rule of [".alloyframe-data/", "ALLOYFRAME_DATA_DIR", "1.5 秒", "未应用的表单和无效 JSON 不会写入", "文件冲突或保存失败时暂停", "浏览器仅额外备份 JSON 草稿", "自动保存不是版本历史", "视图与主题设置不改变设计"]) {
     assert.ok(details.includes(rule), `说明中缺少：${rule}`);
     assert.ok(!text.slice(0, text.indexOf("<details")).includes(rule), `说明提前显示：${rule}`);
   }

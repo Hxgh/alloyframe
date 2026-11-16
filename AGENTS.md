@@ -16,9 +16,9 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 
 ## 工作流与校验命令
 
-- **数据维护**：编辑 `data/designs/<id>.json`（查阅 `data/catalog/*.json` 与 `docs/*.md`），完成后必须运行 `pnpm validate` 或 `pnpm validate <id>`。
+- **数据维护**：公开示例位于 `data/designs/<id>.json`（查阅 `data/catalog/*.json` 与 `docs/*.md`），修改后在项目根目录运行 `ALLOYFRAME_DATA_DIR="$PWD/data" pnpm validate` 或追加 `<id>`，以校验仓库中的公开数据。实际运行项目位于运行数据根目录的 `designs/`，修改后须在对应数据根目录运行 `pnpm validate` 或 `pnpm validate <id>`。
 - **代码修改**：修改源码后须依次通过 `pnpm typecheck`、`pnpm lint`、`pnpm test`、`pnpm validate` 与 `pnpm build`。
-- **路径与环境**：配置 `ALLOYFRAME_DATA_DIR`（兼容旧版 `SUNMAO_DATA_DIR`）时，数据根目录切换至该绝对路径。CLI 仅扫描 `designs/`，忽略 `archive/`；空构件项目仅警告并退出 `0`，存在错误退出 `1`。
+- **路径与环境**：未配置时，数据根目录为当前工作目录下被 Git 忽略的 `.alloyframe-data/`，首次访问时从公开的 `data/` 初始化；配置 `ALLOYFRAME_DATA_DIR`（兼容旧版 `SUNMAO_DATA_DIR`）时切换至该绝对路径，不自动初始化。CLI 仅扫描所选根目录的 `designs/`，忽略 `archive/`；空构件项目仅警告并退出 `0`，存在错误退出 `1`。
 
 ## 设计文件规范（`data/designs/<id>.json`）
 

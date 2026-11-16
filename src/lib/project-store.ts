@@ -4,23 +4,13 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { AccessoryCatalogSchema, CatalogSchema, DesignSchema, IdSchema } from "./schema";
 import type { AccessoryCatalog, Catalog, Design } from "./schema";
-import type { ProjectLibrary, ProjectRecord, ProjectSummary, ValidationIssue } from "./projects";
+import type { ProjectLibrary, ProjectRecord, ProjectSummary } from "./projects";
 import { inspectDesign } from "./validation";
 import { getProjectEnv } from "./project-env";
+import { getDataRoot, ProjectStoreError } from "./data-root";
 import { buildTemplateDesign, type ProjectTemplateId } from "./project-templates";
 
-export class ProjectStoreError extends Error {
-  constructor(public status: number, message: string, public issues?: ValidationIssue[]) {
-    super(message);
-    this.name = "ProjectStoreError";
-  }
-}
-
-export function getDataRoot(): string {
-  const root = getProjectEnv("DATA_DIR") ?? path.join(process.cwd(), "data");
-  if (!path.isAbsolute(root)) throw new ProjectStoreError(400, "ALLOYFRAME_DATA_DIR（兼容 SUNMAO_DATA_DIR）必须是绝对路径");
-  return path.resolve(/* turbopackIgnore: true */ root);
-}
+export { getDataRoot, ProjectStoreError } from "./data-root";
 
 export function getStoreWritable(): boolean {
   return getProjectEnv("READ_ONLY") !== "1";
@@ -250,7 +240,7 @@ export function createProjectStore(options: ProjectStoreOptions) {
         if (result.design.id !== id) throw new ProjectStoreError(400, "设计 id 必须与文件名一致");
         summary.status = result.design.parts.length === 0 ? "empty" : "valid";
       } catch (error) {
-        summary.error = error instanceof Error ? error.message : "无法读取项目";
+        summary.error = error instanceof ProjectStoreError ? error.message : "无法读取项目";
       }
       return summary;
     }));
