@@ -199,6 +199,19 @@ export function ProjectLibrary({ initial }: Props) {
               </form>
             </section>
           )}
+          {!form && <section aria-label="典型 DIY 示例" className="space-y-3 rounded-lg border bg-card p-3">
+            <div className="space-y-1">
+              <h2 className="text-sm font-semibold">从典型 DIY 示例开始</h2>
+              <p className="text-xs leading-5 text-muted-foreground">同一 I 型槽 8 配套，连接角码可见、套件数量可核对。创建独立副本，不覆盖示例或已有项目。</p>
+            </div>
+            <div className="grid gap-3 md:grid-cols-3">
+              {PROJECT_TEMPLATES.filter((item) => item.id !== "blank").map((item) => <article key={item.id} className="flex min-w-0 flex-col gap-2 rounded-lg border bg-background p-3">
+                <h3 className="text-sm font-medium">{item.label}</h3>
+                <p className="flex-1 text-xs leading-5 text-muted-foreground">{item.summary}</p>
+                <Button size="touch" variant="outline" disabled={!writable || busy} onClick={() => { showForm({ type: "create", templateId: item.id }); setName(item.label); }}>以此示例新建<ArrowUpRight className="size-4" /></Button>
+              </article>)}
+            </div>
+          </section>}
           <div className="flex flex-wrap items-center gap-2">
             <Input aria-label="搜索项目" placeholder="搜索名称、说明或 ID" value={query} onChange={(event) => setQuery(event.target.value)} className="min-w-0 basis-full flex-1 sm:max-w-sm sm:basis-auto" />
             <div role="group" aria-label="项目范围" className="flex shrink-0 gap-1">

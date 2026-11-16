@@ -75,7 +75,7 @@ export async function readProjectJson(request: Request): Promise<unknown> {
 
 const name = z.string().trim().min(1);
 const fingerprint = z.string().min(1);
-const templateId = z.enum(["blank", "frame-4040", "rack-2020", "standing-desk"]);
+const templateId = z.enum(["blank", "workbench-i8", "shelf-i8", "enclosure-i8", "frame-4040", "rack-2020", "standing-desk"]);
 export const CreateProjectRequestSchema = z.discriminatedUnion("action", [
   z.strictObject({ action: z.literal("create"), name, templateId: templateId.optional() }),
   z.strictObject({ action: z.literal("import"), design: z.unknown(), name: name.optional() }),

@@ -64,7 +64,9 @@ test("3D 优先布局保留桌面侧栏和手机抽屉入口，工具按自身�
   assert.match(css, /grid-template-columns: minmax\(0, 1fr\) var\(--workspace-panel-width\);/);
   assert.match(css, /grid-template-columns: minmax\(0, 1fr\) calc\(var\(--control-icon-size\) \+ 1rem\);/);
   assert.match(css, /\.workspace-scene\s*\{\s*position: relative;\s*container-type: inline-size;\s*container-name: scene;/);
-  assert.match(css, /\.scene-tools\s*\{[^}]*width: min\(100% - 1\.25rem, 32rem\);/);
+  assert.match(css, /\.scene-tools\s*\{[^}]*\bwidth: max-content;/);
+  assert.match(css, /\.scene-tools\s*\{[^}]*max-width: calc\(100% - 1\.25rem\);/);
+  assert.doesNotMatch(css, /\.scene-tools\s*\{[^}]*\bwidth: min\(/);
   assert.match(css, /@container scene \(min-width: 34rem\)\s*\{\s*\.scene-extended-control\s*\{\s*display: inline-flex;/);
   assert.match(css, /\.workspace-scene,\s*\.workspace-panel\s*\{\s*display: flex;\s*flex-direction: column;\s*min-width: 0;\s*min-height: 0;\s*overflow: hidden;/);
   const workspace = await readFile(new URL("../../components/Workspace.tsx", import.meta.url), "utf8");

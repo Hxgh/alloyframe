@@ -1,6 +1,9 @@
+import workbenchI8Json from "../../data/designs/workbench-i8.json";
+import shelfI8Json from "../../data/designs/shelf-i8.json";
+import enclosureI8Json from "../../data/designs/enclosure-i8.json";
 import { DesignSchema, type Design } from "./schema";
 
-export type ProjectTemplateId = "blank" | "frame-4040" | "rack-2020" | "standing-desk";
+export type ProjectTemplateId = "blank" | "workbench-i8" | "shelf-i8" | "enclosure-i8" | "frame-4040" | "rack-2020" | "standing-desk";
 
 export type ProjectTemplate = {
   id: ProjectTemplateId;
@@ -9,7 +12,8 @@ export type ProjectTemplate = {
   build: (name: string) => Design;
 };
 
-export const PROJECT_TEMPLATES: readonly ProjectTemplate[] = [
+/** 完整构建注册表：旧模板仅保留 API / 已有调用兼容，不在新建界面展示。 */
+export const PROJECT_TEMPLATE_REGISTRY: readonly ProjectTemplate[] = [
   {
     id: "blank",
     label: "空白项目",
@@ -21,6 +25,24 @@ export const PROJECT_TEMPLATES: readonly ProjectTemplate[] = [
       parts: [],
       accessories: [],
     }),
+  },
+  {
+    id: "workbench-i8",
+    label: "工作台 · 4040 I8",
+    summary: "800×600×750mm；25mm 台面，16 套梁柱角码与 4 套板材固定件，I 型槽 8，未经承载校核。",
+    build: (name) => DesignSchema.parse({ ...workbenchI8Json, id: "project", name }),
+  },
+  {
+    id: "shelf-i8",
+    label: "双层架 · 4040 I8",
+    summary: "600×400×900mm；两块 15mm 层板，16 套梁柱角码与 8 套板材固定件，I 型槽 8，未经承载校核。",
+    build: (name) => DesignSchema.parse({ ...shelfI8Json, id: "project", name }),
+  },
+  {
+    id: "enclosure-i8",
+    label: "开放式围框 · 4040 I8",
+    summary: "600×500×600mm 开放骨架，16 套梁柱角码；无封板或防护装置，不是防护罩，未经承载校核。",
+    build: (name) => DesignSchema.parse({ ...enclosureI8Json, id: "project", name }),
   },
   {
     id: "frame-4040",
@@ -522,8 +544,11 @@ export const PROJECT_TEMPLATES: readonly ProjectTemplate[] = [
   },
 ] as const;
 
+export const PROJECT_TEMPLATES: readonly ProjectTemplate[] = PROJECT_TEMPLATE_REGISTRY.filter(({ id }) =>
+  id === "blank" || id === "workbench-i8" || id === "shelf-i8" || id === "enclosure-i8");
+
 export function buildTemplateDesign(name: string, templateId: ProjectTemplateId = "blank"): Design {
-  const template = PROJECT_TEMPLATES.find((item) => item.id === templateId);
+  const template = PROJECT_TEMPLATE_REGISTRY.find((item) => item.id === templateId);
   if (!template) throw new Error(`未知项目模板: ${String(templateId)}`);
   return template.build(name);
 }

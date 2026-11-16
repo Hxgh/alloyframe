@@ -298,6 +298,9 @@ export function Workspace({ design, catalog, accessoryCatalog, project }: Props)
   );
   const selectedPart = design.parts.find((p) => p.id === selectedId) ?? null;
   const sceneSelectedId = selectedPart?.id ?? null;
+  const selectedConnections = selectedPart ? design.accessories.flatMap((accessory) =>
+    (accessory.instances ?? []).filter((instance) => instance.partIds.includes(selectedPart.id) || instance.anchorPartId === selectedPart.id),
+  ) : [];
 
   function selectPart(id: string) {
     if (editing) return; // 编辑期间锁住目标，3D 点击不能丢弃表单输入。
@@ -338,6 +341,7 @@ export function Workspace({ design, catalog, accessoryCatalog, project }: Props)
             <Scene
               design={design}
               catalog={catalog}
+              accessories={accessoryCatalog}
               selectedId={sceneSelectedId}
               explodeAmount={explodeAmount}
               offsets={offsets}
@@ -447,14 +451,14 @@ export function Workspace({ design, catalog, accessoryCatalog, project }: Props)
                     <PartDetails part={selectedPart} onClear={() => setSelectedId(null)} />
                     <div className="mb-3 flex min-w-0 flex-wrap gap-2">
                       <Button size="touch" variant="outline" disabled={project.readOnly || project.invalid} onClick={() => setEditing(selectedPart)}><Pencil className="size-4" />编辑</Button>
-                      <Button size="touch" variant="ghost" disabled={project.readOnly || project.invalid} onClick={() => {
+                      <Button size="touch" variant="ghost" disabled={project.readOnly || project.invalid} title="仅复制零件，不复制连接实例" onClick={() => {
                         const part = { ...selectedPart, id: nextPartId(design.parts.map((item) => item.id), selectedPart.id) };
                         project.onChange({ ...design, parts: [...design.parts, part] });
                         setSelectedId(part.id);
                       }}><Copy className="size-4" />复制</Button>
                       {(["x", "z"] as const satisfies readonly MirrorAxis[]).filter((axis) => selectedPart.position[axis === "x" ? 0 : 2] !== 0).map((axis) => (
                         <Button key={axis} size="touch" variant="ghost" disabled={project.readOnly || project.invalid}
-                          title={axis === "x" ? "沿 X 轴生成左右对称零件" : "沿 Z 轴生成前后对称零件"}
+                          title={`${axis === "x" ? "沿 X 轴生成左右对称零件" : "沿 Z 轴生成前后对称零件"}，不复制连接实例`}
                           onClick={() => {
                             const part = mirrorPart(selectedPart, design.parts.map((item) => item.id), axis);
                             project.onChange({ ...design, parts: [...design.parts, part] });
@@ -464,8 +468,10 @@ export function Workspace({ design, catalog, accessoryCatalog, project }: Props)
                           <FlipHorizontal2 className="size-4" />{axis === "x" ? "左右镜像" : "前后镜像"}
                         </Button>
                       ))}
-                      <Button size="icon-touch" variant="ghost" aria-label="删除选中零件" title="删除选中零件" disabled={project.readOnly || project.invalid} onClick={() => setDeleting(selectedPart)}><Trash2 className="size-4" /></Button>
+                      <Button size="icon-touch" variant="ghost" aria-label="删除选中零件" title={selectedConnections.length ? "此零件被连接实例引用，请先在项目高级 JSON 中移除或调整连接" : "删除选中零件"} disabled={project.readOnly || project.invalid || selectedConnections.length > 0} onClick={() => { if (selectedConnections.length === 0) setDeleting(selectedPart); }}><Trash2 className="size-4" /></Button>
                     </div>
+                    <p className="mb-3 text-xs leading-5 text-muted-foreground">复制与镜像仅生成零件，不复制连接实例；新零件的连接须通过项目高级 JSON 单独配置。几何编辑不会自动重新布置连接，无效连接将由数据校验阻止保存。</p>
+                    {selectedConnections.length > 0 && <p role="status" className="mb-3 rounded-lg border border-border bg-muted/40 p-3 text-xs leading-5 wrap-anywhere">暂不可删除：此零件被 {selectedConnections.length} 个连接实例引用（{selectedConnections.map((instance) => instance.id).join("、")}）。请先在项目高级 JSON 中移除或调整这些连接，并同步配件数量。</p>}
                   </>}
                 </PartsList>}
               </TabsContent>
@@ -483,7 +489,9 @@ export function Workspace({ design, catalog, accessoryCatalog, project }: Props)
         </aside>
       </main>
       <ConfirmDialog open={deleting !== null} onOpenChange={(open) => { if (!open) setDeleting(null); }} title="删除零件" description={`从当前草稿移除“${deleting?.role ?? ""}”。${project.autoSave ? "自动保存开启，删除后有效草稿将写入服务端文件；已保存的删除没有历史回滚。" : "保存项目后才会写入服务端文件。"}`} confirmLabel="删除零件" destructive onConfirm={() => {
-        if (deleting && !project.readOnly && !project.invalid) project.onChange({ ...design, parts: design.parts.filter((part) => part.id !== deleting.id) });
+        if (deleting && !project.readOnly && !project.invalid && !design.accessories.some((accessory) =>
+          accessory.instances?.some((instance) => instance.partIds.includes(deleting.id) || instance.anchorPartId === deleting.id),
+        )) project.onChange({ ...design, parts: design.parts.filter((part) => part.id !== deleting.id) });
         setSelectedId(null);
         setDeleting(null);
       }} />
