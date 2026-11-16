@@ -135,3 +135,10 @@ test("设计与目录编辑器Schema同运行时结构同步，接受各自的sc
     assert.deepEqual(JSON.parse(await readFile(new URL(path, import.meta.url), "utf8")), expected);
   }
 });
+
+test("场景同时绘制连接实例并以共同边界取景，不额外叠加配件费用", async () => {
+  const scene = await readFile(new URL("../../components/scene/Scene.tsx", import.meta.url), "utf8");
+  assert.match(scene, /resolveAccessoryInstances\(design, accessories, offsets\)/);
+  assert.match(scene, /<AccessoryMesh key=\{item\.instance\.id\}/);
+  assert.match(scene, /displayedDesignBounds\(design, accessories, offsets\)/);
+});
