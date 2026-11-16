@@ -1,7 +1,7 @@
 {
   "$schema": "./profiles.schema.json",
   "version": 1,
-  "note": "铝型材库。massPerMetre 与 inertia 为行业公开资料估算值，采购前必须以供应商实测手册核对。source 字段标明每个数字的来源等级：supplier=供应商手册，estimate=公开资料估算。",
+  "note": "铝型材库。massPerMetre 与 inertia 为行业公开资料估算值，采购前必须以供应商实测手册核对。source 字段标明每个数字的来源等级：supplier=供应商手册，estimate=公开资料估算。4040-i8 单独表示 I 型槽 8 连接体系，不与旧 4040 配件混用；参考 https://www.motedis.com/en/Profile-40x40L-I-Type-slot-8 的 40×40mm 截面、8mm 槽口及 12mm 槽深。其腔宽、唇口、腔起始深度、中心孔、米重、面积、惯性矩与人民币价格均为示意估算，截面模型非供应商 CAD，采购与加工前须复核。",
   "profiles": [
     {
       "id": "2020",
@@ -86,6 +86,35 @@
         "升降桌框架",
         "设备机架",
         "自动化设备"
+      ]
+    },
+    {
+      "id": "4040-i8",
+      "name": "4040 I 型槽 8 · 轻型示意",
+      "series": 40,
+      "connectionFamily": "i-slot-8",
+      "section": {
+        "w": 40,
+        "h": 40
+      },
+      "slot": {
+        "open": 8,
+        "cavity": 16,
+        "lip": 2,
+        "neck": 4,
+        "depth": 12,
+        "bore": 6.8
+      },
+      "massPerMetre": 1.35,
+      "inertia": 133000,
+      "area": 500,
+      "pricePerMetre": 38,
+      "currency": "CNY",
+      "source": "estimate",
+      "commonUses": [
+        "I 型槽 8 工作台",
+        "双层架",
+        "开放式设备围框"
       ]
     },
     {

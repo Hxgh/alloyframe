@@ -6,6 +6,7 @@ import { beamDims } from "./materials";
 import type { ValidationIssue } from "./projects";
 import type { SceneBounds } from "./scene-fit";
 import { designBounds, partRotation } from "./tslot";
+import { inspectAccessoryConnections } from "./accessory-connections";
 
 // 保留原有阈值：AABB 各轴交叠须超过 0.5mm；包围盒或地面间距超过 10mm 才提示可能悬空。
 const INTERFERENCE_EPSILON_MM = 0.5;
@@ -214,6 +215,8 @@ export function inspectDesign(
       });
     }
   }
+
+  issues.push(...inspectAccessoryConnections(design, catalog, accessories));
 
   if (design.meta.heightRange != null) {
     const [minHeight, maxHeight] = design.meta.heightRange;

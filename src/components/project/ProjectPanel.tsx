@@ -68,7 +68,12 @@ type MetadataFields = {
   profileSeries: string;
 };
 
-type AccessoryFields = { ref: string; qty: string; note: string };
+type AccessoryFields = {
+  ref: string;
+  qty: string;
+  note: string;
+  instances?: Design["accessories"][number]["instances"];
+};
 
 function initialMetadata(design: Design): MetadataFields {
   return {
@@ -84,7 +89,12 @@ function initialMetadata(design: Design): MetadataFields {
 }
 
 function initialAccessories(design: Design): AccessoryFields[] {
-  return design.accessories.map((item) => ({ ref: item.ref, qty: String(item.qty), note: item.note ?? "" }));
+  return design.accessories.map((item) => ({
+    ref: item.ref,
+    qty: String(item.qty),
+    note: item.note ?? "",
+    ...(item.instances !== undefined ? { instances: item.instances } : {}),
+  }));
 }
 
 function MetadataForm({
@@ -264,11 +274,15 @@ function AccessoriesForm({
       refs.add(row.ref);
       const error = numberError(row.qty, `「${name}」的数量`, { positive: true, integer: true });
       if (error) nextErrors[`${index}.qty`] = error;
+      else if (row.instances !== undefined && numberFromText(row.qty) !== row.instances.length) {
+        nextErrors[`${index}.qty`] = `「${name}」已有 ${row.instances.length} 个安装实例，数量必须与实例数一致；请在高级 JSON 中同步编辑数量与 instances。`;
+      }
     });
     const result = DesignAccessorySchema.array().safeParse(rows.map((row) => ({
       ref: row.ref,
       qty: numberFromText(row.qty),
       ...(row.note.trim() ? { note: row.note.trim() } : {}),
+      ...(row.instances !== undefined ? { instances: row.instances } : {}),
     })));
     if (!result.success && Object.keys(nextErrors).length === 0) {
       nextErrors.form = "配件清单格式不正确，请检查引用和数量。";
@@ -289,6 +303,9 @@ function AccessoriesForm({
     <>
       <form onSubmit={apply} noValidate aria-labelledby={`${prefix}-heading`} className="min-w-0 space-y-4 rounded-lg border border-border bg-card p-3">
         <h3 id={`${prefix}-heading`} className="text-sm font-semibold">项目配件</h3>
+        {rows.length > 0 && rows.every((row) => !row.instances?.length) && (
+          <p role="status" className="text-xs leading-5 text-muted-foreground">当前配件仅计入物料清单，未建模安装关系；清单数量和几何校验通过不代表已连接。</p>
+        )}
         <FormErrors errors={errors} />
         {rows.length === 0 ? (
           <p className="text-xs text-muted-foreground">尚未添加配件。</p>
@@ -310,9 +327,47 @@ function AccessoriesForm({
                   </div>
                   {referenceError && <p className="text-xs leading-5 text-destructive wrap-anywhere">{referenceError}</p>}
                   <div className="grid min-w-0 grid-cols-1 gap-3">
-                    <TextField id={`${prefix}-${index}-qty`} label={`数量${item?.unit ? `（${item.unit}）` : ""}`} aria-label={`${item?.name ?? row.ref}的数量`} type="number" inputMode="numeric" min={1} step={1} value={row.qty} onChange={(event) => updateRow(index, "qty", event.target.value)} disabled={disabled} error={errors[`${index}.qty`]} required />
+                    <TextField id={`${prefix}-${index}-qty`} label={`数量${item?.unit ? `（${item.unit}）` : ""}`} aria-label={`${item?.name ?? row.ref}的数量`} type="number" inputMode="numeric" min={1} step={1} value={row.qty} onChange={(event) => updateRow(index, "qty", event.target.value)} disabled={disabled} error={errors[`${index}.qty`]} hint={row.instances !== undefined ? `已有 ${row.instances.length} 个安装实例，数量须与实例数一致。修改备注不会删除实例。` : undefined} required />
                     <TextField id={`${prefix}-${index}-note`} label="备注（可选）" aria-label={`${item?.name ?? row.ref}的备注`} value={row.note} onChange={(event) => updateRow(index, "note", event.target.value)} disabled={disabled} />
                   </div>
+                  {(row.instances !== undefined || Boolean(item?.components?.length)) && (
+                    <details className="group/connection min-w-0 rounded-lg border border-border bg-muted/20">
+                      <summary className="flex min-h-[var(--control-height)] min-w-0 cursor-pointer list-none items-center justify-between gap-2 rounded-lg px-3 py-1.5 text-xs font-medium outline-none focus-visible:ring-3 focus-visible:ring-ring/50 [&::-webkit-details-marker]:hidden">
+                        连接说明 · {row.instances?.length ?? 0} 个安装实例（只读）
+                        <ChevronDownIcon className="size-4 shrink-0 transition-transform group-open/connection:rotate-180" aria-hidden="true" />
+                      </summary>
+                      <div className="min-w-0 space-y-3 border-t border-border p-3 text-xs leading-5">
+                        {Boolean(item?.components?.length) && (
+                          <div className="min-w-0 space-y-1">
+                            <p className="font-medium">每套完整内含件</p>
+                            <ul className="list-outside list-disc space-y-1 pl-4">
+                              {item!.components!.map((component, componentIndex) => (
+                                <li key={componentIndex} className="wrap-anywhere">{component.name} × {component.qty}{component.spec ? `（${component.spec}）` : ""}</li>
+                              ))}
+                            </ul>
+                            <p className="text-muted-foreground">以上内含件已计入本套件，不要在配件清单中重复加购；每个安装实例计 1 套。</p>
+                          </div>
+                        )}
+                        {row.instances?.length ? (
+                          <ol className="min-w-0 space-y-3" aria-label={`${item?.name ?? row.ref}的连接实例`}>
+                            {row.instances.map((instance) => (
+                              <li key={instance.id} className="min-w-0 space-y-1 border-t border-border pt-2">
+                                <p className="font-mono font-medium wrap-anywhere">{instance.id}</p>
+                                {instance.partIds.map((partId, partIndex) => {
+                                  const part = design.parts.find((candidate) => candidate.id === partId);
+                                  return <p key={partIndex} className="wrap-anywhere">安装面 {partIndex + 1}：{part?.role ?? "零件缺失"}（<code>{partId}</code>）</p>;
+                                })}
+                                <p className="wrap-anywhere">拆解锚点：<code>{instance.anchorPartId}</code></p>
+                                <p className="font-mono wrap-anywhere">世界位置 [{instance.position.join(", ")}] mm · 旋转 [{instance.rotation.join(", ")}] °</p>
+                                <p className="wrap-anywhere">备注：{instance.note || "未填写"}</p>
+                              </li>
+                            ))}
+                          </ol>
+                        ) : <p className="text-muted-foreground">尚无安装实例，仅计入物料清单，不表示已完成连接。</p>}
+                        <p className="text-muted-foreground">实例使用世界坐标（mm）和角度（度），仅可通过高级 JSON 编辑；本工具不自动装配求解，编辑或移动零件不会自动重新布置连接。角码为示意，不代表加工图或额定载荷。</p>
+                      </div>
+                    </details>
+                  )}
                 </li>
               );
             })}
@@ -338,7 +393,7 @@ function AccessoriesForm({
         open={pendingRemoval !== null}
         onOpenChange={(open) => { if (!open) setPendingRemoval(null); }}
         title="移除项目配件？"
-        description={`将从待应用的配件清单中移除「${removalName}」。配件库本身不会改变。`}
+        description={`将从待应用的配件清单中移除「${removalName}」${removalRow?.instances?.length ? `及其 ${removalRow.instances.length} 个连接实例` : ""}。配件库本身不会改变。`}
         confirmLabel="移除配件"
         destructive
         onConfirm={() => {

@@ -15,6 +15,7 @@ import ts from "typescript";
 import designJson from "../../../data/designs/standing-desk.json";
 import { DesignSchema, type Design } from "../schema";
 import { designBounds } from "../tslot";
+import { displayedDesignBounds, resolveAccessoryInstances } from "../accessory-connections";
 import { explodeOffsets } from "../explode";
 import { createFullscreenController } from "../fullscreen";
 import { createTapGesture, isSelectionClick } from "../tap-gesture";
@@ -286,7 +287,7 @@ async function harness(width = 800, height = 600, inputDesign?: Design, delayedS
   const bindings: Record<string, unknown> = {
     h, Fragment, Suspense, useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, useThree,
     PCFShadowMap, PerspectiveCamera, frameRequest: frame, frameView, applyViewFrame, boundsWithGuides, cameraBounds, visibleBoundsDistance,
-    combineBounds, designBounds, explodeOffsets, buildDimensionGuides,
+    combineBounds, designBounds, displayedDesignBounds, resolveAccessoryInstances, explodeOffsets, buildDimensionGuides,
     createTapGesture, isSelectionClick, sceneControls, createFullscreenController,
     window, document, requestAnimationFrame: clock.request, cancelAnimationFrame: clock.cancel,
     sceneReady: () => ready,
@@ -296,7 +297,7 @@ async function harness(width = 800, height = 600, inputDesign?: Design, delayedS
     Dialog: dialog, DialogContent: pass, DialogTitle: pass, DialogDescription: pass,
   };
   for (const name of [
-    "Environment", "GizmoHelper", "GizmoViewport", "Lightformer", "PartMesh", "SceneDimensions",
+    "Environment", "GizmoHelper", "GizmoViewport", "Lightformer", "PartMesh", "AccessoryMesh", "SceneDimensions",
     "BomPanel", "TabsList", "TabsTrigger", "Header", "ProjectToolbar",
     "PartEditor", "ProjectPanel", "ConfirmDialog", "Box", "Boxes", "ChevronDown", "ChevronLeft", "ChevronRight", "ChevronUp", "CircleHelp", 
     "ClipboardList", "Copy", "FlipHorizontal2", "Focus", "Layers3", "Maximize", "Minimize", "Package", "PackageOpen", "Pencil", "Plus",

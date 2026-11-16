@@ -1,0 +1,151 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "version": {
+      "type": "integer",
+      "exclusiveMinimum": 0,
+      "maximum": 9007199254740991
+    },
+    "note": {
+      "type": "string"
+    },
+    "profiles": {
+      "minItems": 1,
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "series": {
+            "type": "integer",
+            "exclusiveMinimum": 0,
+            "maximum": 9007199254740991
+          },
+          "section": {
+            "type": "object",
+            "properties": {
+              "w": {
+                "type": "number",
+                "exclusiveMinimum": 0
+              },
+              "h": {
+                "type": "number",
+                "exclusiveMinimum": 0
+              }
+            },
+            "required": [
+              "w",
+              "h"
+            ],
+            "additionalProperties": false
+          },
+          "slot": {
+            "type": "object",
+            "properties": {
+              "open": {
+                "type": "number",
+                "exclusiveMinimum": 0
+              },
+              "cavity": {
+                "type": "number",
+                "exclusiveMinimum": 0
+              },
+              "lip": {
+                "type": "number",
+                "minimum": 0
+              },
+              "neck": {
+                "type": "number",
+                "minimum": 0
+              },
+              "depth": {
+                "type": "number",
+                "exclusiveMinimum": 0
+              },
+              "bore": {
+                "type": "number",
+                "exclusiveMinimum": 0
+              }
+            },
+            "required": [
+              "open",
+              "cavity",
+              "lip",
+              "neck",
+              "depth",
+              "bore"
+            ],
+            "additionalProperties": false
+          },
+          "massPerMetre": {
+            "type": "number",
+            "exclusiveMinimum": 0
+          },
+          "inertia": {
+            "type": "number",
+            "exclusiveMinimum": 0
+          },
+          "area": {
+            "type": "number",
+            "exclusiveMinimum": 0
+          },
+          "pricePerMetre": {
+            "type": "number",
+            "minimum": 0
+          },
+          "currency": {
+            "default": "CNY",
+            "type": "string"
+          },
+          "source": {
+            "type": "string",
+            "enum": [
+              "supplier",
+              "estimate"
+            ]
+          },
+          "commonUses": {
+            "default": [],
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "connectionFamily": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "series",
+          "section",
+          "slot",
+          "massPerMetre",
+          "inertia",
+          "area",
+          "pricePerMetre",
+          "currency",
+          "source",
+          "commonUses"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "$schema": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "version",
+    "profiles"
+  ],
+  "additionalProperties": false
+}

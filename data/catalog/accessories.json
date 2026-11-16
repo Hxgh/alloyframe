@@ -14,6 +14,46 @@
       "note": "最常用。外露，可拆。每角 2 颗螺栓。"
     },
     {
+      "id": "bracket-i8-kit",
+      "name": "I8 二孔角码连接套件",
+      "category": "连接件",
+      "fitsSlot": ["4040-i8"],
+      "connectionFamily": "i-slot-8",
+      "mounting": "profile-profile",
+      "unitPrice": 10.2,
+      "unit": "套",
+      "commonUses": ["I 型槽 8 梁柱直角连接"],
+      "components": [
+        { "name": "Motedis I 型槽 8 二孔角码", "qty": 1, "spec": "Bracket 40 I-Type slot 8；36×36×30mm、厚 4mm、孔径 9mm 为简化示意，实物尺寸需复核" },
+        { "name": "内六角圆柱头螺栓", "qty": 2, "spec": "DIN 912 M8×16；材料、等级与有效啮合长度采购前复核" },
+        { "name": "I 型槽 8 导向 T 螺母", "qty": 2, "spec": "M8，专用于 I-Type slot 8，不与旧 4040 目录螺母混用" }
+      ],
+      "visual": { "kind": "angle-bracket", "size": [36, 36, 30], "thickness": 4, "holeDiameter": 9 },
+      "sourceUrl": "https://www.motedis.com/en/Bracket-40-I-Type-slot-8",
+      "note": "按一只二孔角码、2 颗 M8×16 螺栓、2 颗 I 型槽 8 M8 T 螺母组成一套计费；design.qty 是唯一计费数量，有 instances 时须等于 instances.length，不再另列套内紧固件。Motedis 页面支持同规格选配；角码与孔位模型并非供应商 CAD，36×36×30mm、厚 4mm、孔径 9mm 仅为示意。套价为人民币估算，不是供应商报价；装配前须核对槽型、孔位、螺栓啮合及不顶底条件，未做承载校核。"
+    },
+    {
+      "id": "panel-i8-kit",
+      "name": "I8 角码板材固定套件",
+      "category": "板材固定",
+      "fitsSlot": ["4040-i8"],
+      "connectionFamily": "i-slot-8",
+      "mounting": "profile-panel",
+      "unitPrice": 9.4,
+      "unit": "套",
+      "commonUses": ["15mm 层板底面固定", "25mm 台面底面固定"],
+      "components": [
+        { "name": "Motedis I 型槽 8 二孔角码", "qty": 1, "spec": "Bracket 40 I-Type slot 8；36×36×30mm、厚 4mm、孔径 9mm 为简化示意，实物尺寸需复核" },
+        { "name": "内六角圆柱头螺栓", "qty": 1, "spec": "DIN 912 M8×16；材料、等级与有效啮合长度采购前复核" },
+        { "name": "I 型槽 8 导向 T 螺母", "qty": 1, "spec": "M8，专用于 I-Type slot 8" },
+        { "name": "盘头木螺钉", "qty": 1, "spec": "3.5×10mm 示意规格，15mm/25mm 木板统一使用；非沉头，须与垫片及预钻孔配合，入木深度不得超过板厚" },
+        { "name": "大平垫片", "qty": 1, "spec": "内径 4.3mm × 外径 12mm × 厚 1mm 示意规格；外径须大于角码 9mm 孔，螺钉头须可靠压住垫片" }
+      ],
+      "visual": { "kind": "angle-bracket", "size": [36, 36, 30], "thickness": 4, "holeDiameter": 9 },
+      "sourceUrl": "https://www.motedis.com/en/Bracket-40-I-Type-slot-8",
+      "note": "一套含角码、1 颗 M8×16、1 颗 I 型槽 8 M8 T 螺母、1 颗 3.5×10mm 盘头木螺钉和 1 只 4.3×12×1mm 大平垫片，只按套计费。木螺钉与垫片是本项目示意配套，不宣称为 Motedis 原厂板材套件；角码 9mm 大孔必须配大垫片，采购前核对实际孔径、螺钉头和垫片搭接。15mm/25mm 板均暂用 3.5×10mm，从板底安装；按 4mm 角码和 1mm 垫片估算入木约 5 = 10 − 4 − 1mm，实际入木深度不得超过板厚或穿出板面，预钻孔深度与握钉力均需复核。几何非供应商 CAD、价格为估算，未经承载与抗拔验证。"
+    },
+    {
       "id": "bracket-inner-4040",
       "name": "4040 内置角码",
       "category": "连接件",
@@ -41,7 +81,7 @@
       "unitPrice": 0.6,
       "unit": "个",
       "commonUses": ["槽内螺栓固定", "配件安装"],
-      "note": "标准菱形 T 螺母。配 M8 内六角螺栓。"
+      "note": "旧目录 M8 T 螺母，配 M8 内六角螺栓；fitsSlot 保留历史引用，不代表已核实跨槽族通用。采购前逐项核对槽口、腔宽、导向与螺纹，不与 4040-i8 的 I 型槽 8 螺母混用。"
     },
     {
       "id": "tnut-m6",
@@ -61,7 +101,7 @@
       "unitPrice": 1.2,
       "unit": "个",
       "commonUses": ["任意位置固定", "免穿端安装"],
-      "note": "可从槽口任意位置压入，不需要从端头滑入。装配便利性显著提升。"
+      "note": "匹配槽型时可从槽口压入，无需从端头滑入；fitsSlot 保留历史引用，跨槽族适配未核实。采购前核对弹片、槽口和腔宽，不与 4040-i8 的 I 型槽 8 螺母混用。"
     },
     {
       "id": "bolt-m8x20",
@@ -71,7 +111,7 @@
       "unitPrice": 0.5,
       "unit": "个",
       "commonUses": ["角码固定", "配件固定"],
-      "note": "304 不锈钢优先，避免与铝发生电偶腐蚀。"
+      "note": "M8×20 为旧目录示意规格，不是所有角码的通用长度；按实际套件核对厚度、有效啮合与不顶底条件。材料、表面处理、隔离及防腐应按使用环境和供应商规范选定，不锈钢与铝接触并不消除电偶腐蚀风险。"
     },
     {
       "id": "cap-end-4040",
@@ -91,7 +131,7 @@
       "unitPrice": 6,
       "unit": "个",
       "commonUses": ["落地调平"],
-      "note": "带橡胶底垫。螺纹 M8 旋入型材中心孔。调节量约 ±10mm，用于补偿地面不平。"
+      "note": "带橡胶底垫，M8 螺纹须连接预先正确攻丝的端孔或独立螺纹底板，不可默认直接旋入型材原始中心孔。调节量约 ±10mm 为示意，实际行程、安装及承载须按供应商规范复核。"
     },
     {
       "id": "caster-m10-2in",
@@ -111,7 +151,7 @@
       "unitPrice": 4,
       "unit": "米",
       "commonUses": ["嵌装 5-10mm 板材"],
-      "note": "压入槽口后形成 U 型槽，板材可直接插入，无需打孔。是桌面固定的首选方式。"
+      "note": "仅用于与压条及型材槽型匹配的 5–10mm 板材嵌装，需复核实际板厚、槽口和嵌入深度；不适用于覆盖框架的 25mm 木台面，不能替代其底面角码等专用固定方案。"
     }
   ]
 }

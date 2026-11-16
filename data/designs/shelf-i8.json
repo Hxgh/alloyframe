@@ -1,0 +1,736 @@
+{
+  "$schema": "../design.schema.json",
+  "id": "shelf-i8",
+  "name": "双层架 · 4040 I8",
+  "units": "mm",
+  "meta": {
+    "description": "600 × 400 × 900mm 双层架，4040 I 型槽 8 四柱双圈框架，两块 520 × 400 × 15mm 木层板，含 16 套梁柱角码和 8 套板材固定件。",
+    "frameHeight": 900,
+    "profileSeries": "4040 I-Type slot 8",
+    "note": "右手坐标，地面中心为原点，所有尺寸为 mm；结构外廓 600×400×900mm。型材仅用 4040-i8（i-slot-8），不混用旧 4040 五金。型材参考 https://www.motedis.com/en/Profile-40x40L-I-Type-slot-8；角码与 M8×16/I8 M8 T 螺母选配参考 https://www.motedis.com/en/Bracket-40-I-Type-slot-8。型材内部截面、36×36×30mm 角码、4mm 厚度与 9mm 孔为简化示意，并非供应商 CAD；材料、价格、加工与装配规格须复核。角码 position 是两外安装面交线中心，实体沿局部 +x、+y，局部 z 为宽度方向；rotation 由 THREE.Matrix4.makeBasis(u,v,u×v) 转 Euler XYZ 角度，v=(0,-1,0)。板材固定件的 3.5×10mm 盘头木螺钉和 4.3×12×1mm 大垫片为示意，15/25mm 板均须控制入木不超过板厚并复核握钉力。未做承载、抗扭、抗拔或稳定性校核，无额定载荷承诺。"
+  },
+  "parts": [
+    {
+      "id": "top-shelf",
+      "kind": "plate",
+      "role": "上层板",
+      "material": "桦木多层板",
+      "size": [
+        520,
+        15,
+        400
+      ],
+      "position": [
+        0,
+        787.5,
+        0
+      ],
+      "note": "板材长 520 = 600 − 80mm = 600 − 2×40mm，位于左右立柱内侧，仅边界接触、不相交；深 400 = 400 − 0mm；厚 15mm。板底 780 = 760 + 40/2mm，板中心 787.5 = 780 + 15/2mm；从底面以 4 套 panel-i8-kit 固定，木螺钉入木不得超过板厚，孔大配垫片。"
+    },
+    {
+      "id": "bottom-shelf",
+      "kind": "plate",
+      "role": "下层板",
+      "material": "桦木多层板",
+      "size": [
+        520,
+        15,
+        400
+      ],
+      "position": [
+        0,
+        147.5,
+        0
+      ],
+      "note": "板材长 520 = 600 − 80mm = 600 − 2×40mm，位于左右立柱内侧，仅边界接触、不相交；深 400 = 400 − 0mm；厚 15mm。板底 140 = 120 + 40/2mm，板中心 147.5 = 140 + 15/2mm；从底面以 4 套 panel-i8-kit 固定，木螺钉入木不得超过板厚，孔大配垫片。"
+    },
+    {
+      "kind": "beam",
+      "profile": "4040-i8",
+      "material": "6063-T5 铝合金银白阳极氧化（牌号待供应商复核）",
+      "id": "post-front-left",
+      "role": "立柱",
+      "size": [
+        40,
+        900,
+        40
+      ],
+      "position": [
+        -280,
+        450,
+        180
+      ],
+      "note": "截面 40×40mm；立柱下料长度 900 = 900 − 0mm（全高，无端头扣减），中心高 450 = 900/2mm，底面 y=0。"
+    },
+    {
+      "kind": "beam",
+      "profile": "4040-i8",
+      "material": "6063-T5 铝合金银白阳极氧化（牌号待供应商复核）",
+      "id": "post-front-right",
+      "role": "立柱",
+      "size": [
+        40,
+        900,
+        40
+      ],
+      "position": [
+        280,
+        450,
+        180
+      ],
+      "note": "截面 40×40mm；立柱下料长度 900 = 900 − 0mm（全高，无端头扣减），中心高 450 = 900/2mm，底面 y=0。"
+    },
+    {
+      "kind": "beam",
+      "profile": "4040-i8",
+      "material": "6063-T5 铝合金银白阳极氧化（牌号待供应商复核）",
+      "id": "post-back-left",
+      "role": "立柱",
+      "size": [
+        40,
+        900,
+        40
+      ],
+      "position": [
+        -280,
+        450,
+        -180
+      ],
+      "note": "截面 40×40mm；立柱下料长度 900 = 900 − 0mm（全高，无端头扣减），中心高 450 = 900/2mm，底面 y=0。"
+    },
+    {
+      "kind": "beam",
+      "profile": "4040-i8",
+      "material": "6063-T5 铝合金银白阳极氧化（牌号待供应商复核）",
+      "id": "post-back-right",
+      "role": "立柱",
+      "size": [
+        40,
+        900,
+        40
+      ],
+      "position": [
+        280,
+        450,
+        -180
+      ],
+      "note": "截面 40×40mm；立柱下料长度 900 = 900 − 0mm（全高，无端头扣减），中心高 450 = 900/2mm，底面 y=0。"
+    },
+    {
+      "kind": "beam",
+      "profile": "4040-i8",
+      "material": "6063-T5 铝合金银白阳极氧化（牌号待供应商复核）",
+      "id": "top-rail-front",
+      "role": "上层框梁",
+      "size": [
+        520,
+        40,
+        40
+      ],
+      "position": [
+        0,
+        760,
+        180
+      ],
+      "note": "夹于左右立柱内侧，下料长度 520 = 600 − 2×40mm；梁中心高 760mm，梁底 740 = 760 − 40/2mm；每端 1 套 bracket-i8-kit，角码在梁底下方，不另扣角码厚度。"
+    },
+    {
+      "kind": "beam",
+      "profile": "4040-i8",
+      "material": "6063-T5 铝合金银白阳极氧化（牌号待供应商复核）",
+      "id": "top-rail-back",
+      "role": "上层框梁",
+      "size": [
+        520,
+        40,
+        40
+      ],
+      "position": [
+        0,
+        760,
+        -180
+      ],
+      "note": "夹于左右立柱内侧，下料长度 520 = 600 − 2×40mm；梁中心高 760mm，梁底 740 = 760 − 40/2mm；每端 1 套 bracket-i8-kit，角码在梁底下方，不另扣角码厚度。"
+    },
+    {
+      "kind": "beam",
+      "profile": "4040-i8",
+      "material": "6063-T5 铝合金银白阳极氧化（牌号待供应商复核）",
+      "id": "top-rail-left",
+      "role": "上层框梁",
+      "size": [
+        40,
+        40,
+        320
+      ],
+      "position": [
+        -280,
+        760,
+        0
+      ],
+      "note": "夹于前后立柱内侧，下料长度 320 = 400 − 2×40mm；梁中心高 760mm，梁底 740 = 760 − 40/2mm；每端 1 套 bracket-i8-kit，角码在梁底下方，不另扣角码厚度。"
+    },
+    {
+      "kind": "beam",
+      "profile": "4040-i8",
+      "material": "6063-T5 铝合金银白阳极氧化（牌号待供应商复核）",
+      "id": "top-rail-right",
+      "role": "上层框梁",
+      "size": [
+        40,
+        40,
+        320
+      ],
+      "position": [
+        280,
+        760,
+        0
+      ],
+      "note": "夹于前后立柱内侧，下料长度 320 = 400 − 2×40mm；梁中心高 760mm，梁底 740 = 760 − 40/2mm；每端 1 套 bracket-i8-kit，角码在梁底下方，不另扣角码厚度。"
+    },
+    {
+      "kind": "beam",
+      "profile": "4040-i8",
+      "material": "6063-T5 铝合金银白阳极氧化（牌号待供应商复核）",
+      "id": "bottom-rail-front",
+      "role": "下层框梁",
+      "size": [
+        520,
+        40,
+        40
+      ],
+      "position": [
+        0,
+        120,
+        180
+      ],
+      "note": "夹于左右立柱内侧，下料长度 520 = 600 − 2×40mm；梁中心高 120mm，梁底 100 = 120 − 40/2mm；每端 1 套 bracket-i8-kit，角码在梁底下方，不另扣角码厚度。"
+    },
+    {
+      "kind": "beam",
+      "profile": "4040-i8",
+      "material": "6063-T5 铝合金银白阳极氧化（牌号待供应商复核）",
+      "id": "bottom-rail-back",
+      "role": "下层框梁",
+      "size": [
+        520,
+        40,
+        40
+      ],
+      "position": [
+        0,
+        120,
+        -180
+      ],
+      "note": "夹于左右立柱内侧，下料长度 520 = 600 − 2×40mm；梁中心高 120mm，梁底 100 = 120 − 40/2mm；每端 1 套 bracket-i8-kit，角码在梁底下方，不另扣角码厚度。"
+    },
+    {
+      "kind": "beam",
+      "profile": "4040-i8",
+      "material": "6063-T5 铝合金银白阳极氧化（牌号待供应商复核）",
+      "id": "bottom-rail-left",
+      "role": "下层框梁",
+      "size": [
+        40,
+        40,
+        320
+      ],
+      "position": [
+        -280,
+        120,
+        0
+      ],
+      "note": "夹于前后立柱内侧，下料长度 320 = 400 − 2×40mm；梁中心高 120mm，梁底 100 = 120 − 40/2mm；每端 1 套 bracket-i8-kit，角码在梁底下方，不另扣角码厚度。"
+    },
+    {
+      "kind": "beam",
+      "profile": "4040-i8",
+      "material": "6063-T5 铝合金银白阳极氧化（牌号待供应商复核）",
+      "id": "bottom-rail-right",
+      "role": "下层框梁",
+      "size": [
+        40,
+        40,
+        320
+      ],
+      "position": [
+        280,
+        120,
+        0
+      ],
+      "note": "夹于前后立柱内侧，下料长度 320 = 400 − 2×40mm；梁中心高 120mm，梁底 100 = 120 − 40/2mm；每端 1 套 bracket-i8-kit，角码在梁底下方，不另扣角码厚度。"
+    }
+  ],
+  "accessories": [
+    {
+      "ref": "bracket-i8-kit",
+      "qty": 16,
+      "note": "两圈框梁共 8 根，每根两端各 1 套：16 = 2×4×2；每套含角码、2 螺栓、2 螺母，仅以 qty 计费，不另重复计套内零件。",
+      "instances": [
+        {
+          "id": "top-rail-front-left",
+          "position": [
+            -260,
+            740,
+            180
+          ],
+          "rotation": [
+            -180,
+            0,
+            0
+          ],
+          "anchorPartId": "post-front-left",
+          "partIds": [
+            "post-front-left",
+            "top-rail-front"
+          ],
+          "note": "外安装面交线中心；局部 x=0 面贴立柱内侧，y=0 面贴梁底；+x 由柱朝梁中心，+y 朝下。"
+        },
+        {
+          "id": "top-rail-front-right",
+          "position": [
+            260,
+            740,
+            180
+          ],
+          "rotation": [
+            0,
+            0,
+            -180
+          ],
+          "anchorPartId": "post-front-right",
+          "partIds": [
+            "post-front-right",
+            "top-rail-front"
+          ],
+          "note": "外安装面交线中心；局部 x=0 面贴立柱内侧，y=0 面贴梁底；+x 由柱朝梁中心，+y 朝下。"
+        },
+        {
+          "id": "top-rail-back-left",
+          "position": [
+            -260,
+            740,
+            -180
+          ],
+          "rotation": [
+            -180,
+            0,
+            0
+          ],
+          "anchorPartId": "post-back-left",
+          "partIds": [
+            "post-back-left",
+            "top-rail-back"
+          ],
+          "note": "外安装面交线中心；局部 x=0 面贴立柱内侧，y=0 面贴梁底；+x 由柱朝梁中心，+y 朝下。"
+        },
+        {
+          "id": "top-rail-back-right",
+          "position": [
+            260,
+            740,
+            -180
+          ],
+          "rotation": [
+            0,
+            0,
+            -180
+          ],
+          "anchorPartId": "post-back-right",
+          "partIds": [
+            "post-back-right",
+            "top-rail-back"
+          ],
+          "note": "外安装面交线中心；局部 x=0 面贴立柱内侧，y=0 面贴梁底；+x 由柱朝梁中心，+y 朝下。"
+        },
+        {
+          "id": "top-rail-left-front",
+          "position": [
+            -280,
+            740,
+            160
+          ],
+          "rotation": [
+            180,
+            -90,
+            0
+          ],
+          "anchorPartId": "post-front-left",
+          "partIds": [
+            "post-front-left",
+            "top-rail-left"
+          ],
+          "note": "外安装面交线中心；局部 x=0 面贴立柱内侧，y=0 面贴梁底；+x 由柱朝梁中心，+y 朝下。"
+        },
+        {
+          "id": "top-rail-left-back",
+          "position": [
+            -280,
+            740,
+            -160
+          ],
+          "rotation": [
+            180,
+            90,
+            0
+          ],
+          "anchorPartId": "post-back-left",
+          "partIds": [
+            "post-back-left",
+            "top-rail-left"
+          ],
+          "note": "外安装面交线中心；局部 x=0 面贴立柱内侧，y=0 面贴梁底；+x 由柱朝梁中心，+y 朝下。"
+        },
+        {
+          "id": "top-rail-right-front",
+          "position": [
+            280,
+            740,
+            160
+          ],
+          "rotation": [
+            180,
+            -90,
+            0
+          ],
+          "anchorPartId": "post-front-right",
+          "partIds": [
+            "post-front-right",
+            "top-rail-right"
+          ],
+          "note": "外安装面交线中心；局部 x=0 面贴立柱内侧，y=0 面贴梁底；+x 由柱朝梁中心，+y 朝下。"
+        },
+        {
+          "id": "top-rail-right-back",
+          "position": [
+            280,
+            740,
+            -160
+          ],
+          "rotation": [
+            180,
+            90,
+            0
+          ],
+          "anchorPartId": "post-back-right",
+          "partIds": [
+            "post-back-right",
+            "top-rail-right"
+          ],
+          "note": "外安装面交线中心；局部 x=0 面贴立柱内侧，y=0 面贴梁底；+x 由柱朝梁中心，+y 朝下。"
+        },
+        {
+          "id": "bottom-rail-front-left",
+          "position": [
+            -260,
+            100,
+            180
+          ],
+          "rotation": [
+            -180,
+            0,
+            0
+          ],
+          "anchorPartId": "post-front-left",
+          "partIds": [
+            "post-front-left",
+            "bottom-rail-front"
+          ],
+          "note": "外安装面交线中心；局部 x=0 面贴立柱内侧，y=0 面贴梁底；+x 由柱朝梁中心，+y 朝下。"
+        },
+        {
+          "id": "bottom-rail-front-right",
+          "position": [
+            260,
+            100,
+            180
+          ],
+          "rotation": [
+            0,
+            0,
+            -180
+          ],
+          "anchorPartId": "post-front-right",
+          "partIds": [
+            "post-front-right",
+            "bottom-rail-front"
+          ],
+          "note": "外安装面交线中心；局部 x=0 面贴立柱内侧，y=0 面贴梁底；+x 由柱朝梁中心，+y 朝下。"
+        },
+        {
+          "id": "bottom-rail-back-left",
+          "position": [
+            -260,
+            100,
+            -180
+          ],
+          "rotation": [
+            -180,
+            0,
+            0
+          ],
+          "anchorPartId": "post-back-left",
+          "partIds": [
+            "post-back-left",
+            "bottom-rail-back"
+          ],
+          "note": "外安装面交线中心；局部 x=0 面贴立柱内侧，y=0 面贴梁底；+x 由柱朝梁中心，+y 朝下。"
+        },
+        {
+          "id": "bottom-rail-back-right",
+          "position": [
+            260,
+            100,
+            -180
+          ],
+          "rotation": [
+            0,
+            0,
+            -180
+          ],
+          "anchorPartId": "post-back-right",
+          "partIds": [
+            "post-back-right",
+            "bottom-rail-back"
+          ],
+          "note": "外安装面交线中心；局部 x=0 面贴立柱内侧，y=0 面贴梁底；+x 由柱朝梁中心，+y 朝下。"
+        },
+        {
+          "id": "bottom-rail-left-front",
+          "position": [
+            -280,
+            100,
+            160
+          ],
+          "rotation": [
+            180,
+            -90,
+            0
+          ],
+          "anchorPartId": "post-front-left",
+          "partIds": [
+            "post-front-left",
+            "bottom-rail-left"
+          ],
+          "note": "外安装面交线中心；局部 x=0 面贴立柱内侧，y=0 面贴梁底；+x 由柱朝梁中心，+y 朝下。"
+        },
+        {
+          "id": "bottom-rail-left-back",
+          "position": [
+            -280,
+            100,
+            -160
+          ],
+          "rotation": [
+            180,
+            90,
+            0
+          ],
+          "anchorPartId": "post-back-left",
+          "partIds": [
+            "post-back-left",
+            "bottom-rail-left"
+          ],
+          "note": "外安装面交线中心；局部 x=0 面贴立柱内侧，y=0 面贴梁底；+x 由柱朝梁中心，+y 朝下。"
+        },
+        {
+          "id": "bottom-rail-right-front",
+          "position": [
+            280,
+            100,
+            160
+          ],
+          "rotation": [
+            180,
+            -90,
+            0
+          ],
+          "anchorPartId": "post-front-right",
+          "partIds": [
+            "post-front-right",
+            "bottom-rail-right"
+          ],
+          "note": "外安装面交线中心；局部 x=0 面贴立柱内侧，y=0 面贴梁底；+x 由柱朝梁中心，+y 朝下。"
+        },
+        {
+          "id": "bottom-rail-right-back",
+          "position": [
+            280,
+            100,
+            -160
+          ],
+          "rotation": [
+            180,
+            90,
+            0
+          ],
+          "anchorPartId": "post-back-right",
+          "partIds": [
+            "post-back-right",
+            "bottom-rail-right"
+          ],
+          "note": "外安装面交线中心；局部 x=0 面贴立柱内侧，y=0 面贴梁底；+x 由柱朝梁中心，+y 朝下。"
+        }
+      ]
+    },
+    {
+      "ref": "panel-i8-kit",
+      "qty": 8,
+      "note": "8 = 2×2×2 套，每块板在前后梁 x=±130mm 各两点固定；每套角码、1 螺栓、1 螺母、1 木螺钉、1 大垫片，只按 qty 计费。木螺钉与垫片规格为示意，采购与装配前复核。",
+      "instances": [
+        {
+          "id": "top-shelf-front-left",
+          "position": [
+            -130,
+            780,
+            160
+          ],
+          "rotation": [
+            180,
+            -90,
+            0
+          ],
+          "anchorPartId": "top-rail-front",
+          "partIds": [
+            "top-rail-front",
+            "top-shelf"
+          ],
+          "note": "外安装面交线中心；局部 x=0 面贴前梁内侧，y=0 面贴板底；+x 朝框内，+y 朝下。木螺钉 3.5×10mm 及大垫片为示意，入木深度不得超过 15mm 板厚，预钻与握钉力需复核。"
+        },
+        {
+          "id": "top-shelf-front-right",
+          "position": [
+            130,
+            780,
+            160
+          ],
+          "rotation": [
+            180,
+            -90,
+            0
+          ],
+          "anchorPartId": "top-rail-front",
+          "partIds": [
+            "top-rail-front",
+            "top-shelf"
+          ],
+          "note": "外安装面交线中心；局部 x=0 面贴前梁内侧，y=0 面贴板底；+x 朝框内，+y 朝下。木螺钉 3.5×10mm 及大垫片为示意，入木深度不得超过 15mm 板厚，预钻与握钉力需复核。"
+        },
+        {
+          "id": "top-shelf-back-left",
+          "position": [
+            -130,
+            780,
+            -160
+          ],
+          "rotation": [
+            180,
+            90,
+            0
+          ],
+          "anchorPartId": "top-rail-back",
+          "partIds": [
+            "top-rail-back",
+            "top-shelf"
+          ],
+          "note": "外安装面交线中心；局部 x=0 面贴后梁内侧，y=0 面贴板底；+x 朝框内，+y 朝下。木螺钉 3.5×10mm 及大垫片为示意，入木深度不得超过 15mm 板厚，预钻与握钉力需复核。"
+        },
+        {
+          "id": "top-shelf-back-right",
+          "position": [
+            130,
+            780,
+            -160
+          ],
+          "rotation": [
+            180,
+            90,
+            0
+          ],
+          "anchorPartId": "top-rail-back",
+          "partIds": [
+            "top-rail-back",
+            "top-shelf"
+          ],
+          "note": "外安装面交线中心；局部 x=0 面贴后梁内侧，y=0 面贴板底；+x 朝框内，+y 朝下。木螺钉 3.5×10mm 及大垫片为示意，入木深度不得超过 15mm 板厚，预钻与握钉力需复核。"
+        },
+        {
+          "id": "bottom-shelf-front-left",
+          "position": [
+            -130,
+            140,
+            160
+          ],
+          "rotation": [
+            180,
+            -90,
+            0
+          ],
+          "anchorPartId": "bottom-rail-front",
+          "partIds": [
+            "bottom-rail-front",
+            "bottom-shelf"
+          ],
+          "note": "外安装面交线中心；局部 x=0 面贴前梁内侧，y=0 面贴板底；+x 朝框内，+y 朝下。木螺钉 3.5×10mm 及大垫片为示意，入木深度不得超过 15mm 板厚，预钻与握钉力需复核。"
+        },
+        {
+          "id": "bottom-shelf-front-right",
+          "position": [
+            130,
+            140,
+            160
+          ],
+          "rotation": [
+            180,
+            -90,
+            0
+          ],
+          "anchorPartId": "bottom-rail-front",
+          "partIds": [
+            "bottom-rail-front",
+            "bottom-shelf"
+          ],
+          "note": "外安装面交线中心；局部 x=0 面贴前梁内侧，y=0 面贴板底；+x 朝框内，+y 朝下。木螺钉 3.5×10mm 及大垫片为示意，入木深度不得超过 15mm 板厚，预钻与握钉力需复核。"
+        },
+        {
+          "id": "bottom-shelf-back-left",
+          "position": [
+            -130,
+            140,
+            -160
+          ],
+          "rotation": [
+            180,
+            90,
+            0
+          ],
+          "anchorPartId": "bottom-rail-back",
+          "partIds": [
+            "bottom-rail-back",
+            "bottom-shelf"
+          ],
+          "note": "外安装面交线中心；局部 x=0 面贴后梁内侧，y=0 面贴板底；+x 朝框内，+y 朝下。木螺钉 3.5×10mm 及大垫片为示意，入木深度不得超过 15mm 板厚，预钻与握钉力需复核。"
+        },
+        {
+          "id": "bottom-shelf-back-right",
+          "position": [
+            130,
+            140,
+            -160
+          ],
+          "rotation": [
+            180,
+            90,
+            0
+          ],
+          "anchorPartId": "bottom-rail-back",
+          "partIds": [
+            "bottom-rail-back",
+            "bottom-shelf"
+          ],
+          "note": "外安装面交线中心；局部 x=0 面贴后梁内侧，y=0 面贴板底；+x 朝框内，+y 朝下。木螺钉 3.5×10mm 及大垫片为示意，入木深度不得超过 15mm 板厚，预钻与握钉力需复核。"
+        }
+      ]
+    }
+  ]
+}

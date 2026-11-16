@@ -1,0 +1,153 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "version": {
+      "type": "integer",
+      "exclusiveMinimum": 0,
+      "maximum": 9007199254740991
+    },
+    "note": {
+      "type": "string"
+    },
+    "accessories": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "category": {
+            "type": "string"
+          },
+          "fitsSlot": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "unitPrice": {
+            "type": "number",
+            "minimum": 0
+          },
+          "unit": {
+            "type": "string"
+          },
+          "commonUses": {
+            "default": [],
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "note": {
+            "type": "string"
+          },
+          "connectionFamily": {
+            "type": "string",
+            "minLength": 1
+          },
+          "mounting": {
+            "type": "string",
+            "enum": [
+              "profile-profile",
+              "profile-panel"
+            ]
+          },
+          "components": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "qty": {
+                  "type": "integer",
+                  "exclusiveMinimum": 0,
+                  "maximum": 9007199254740991
+                },
+                "spec": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "name",
+                "qty"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "sourceUrl": {
+            "type": "string",
+            "format": "uri"
+          },
+          "visual": {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "angle-bracket"
+              },
+              "size": {
+                "type": "array",
+                "prefixItems": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "number"
+                  }
+                ],
+                "items": false,
+                "minItems": 3,
+                "maxItems": 3
+              },
+              "thickness": {
+                "type": "number",
+                "exclusiveMinimum": 0
+              },
+              "holeDiameter": {
+                "type": "number",
+                "exclusiveMinimum": 0
+              }
+            },
+            "required": [
+              "kind",
+              "size",
+              "thickness",
+              "holeDiameter"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "category",
+          "fitsSlot",
+          "unitPrice",
+          "unit",
+          "commonUses"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "$schema": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "version",
+    "accessories"
+  ],
+  "additionalProperties": false
+}

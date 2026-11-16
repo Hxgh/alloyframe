@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { inspectAccessoryConnections } from "./accessory-connections";
 
 /**
  * 单位约定：全局使用毫米（mm），不做任何 mm <-> m 转换。
@@ -36,6 +37,8 @@ export const ProfileSchema = z.object({
   /** supplier=供应商手册, estimate=公开资料估算 */
   source: z.enum(["supplier", "estimate"]),
   commonUses: z.array(z.string()).default([]),
+  /** 连接接口族，不能仅凭截面尺寸或螺纹推断兼容。 */
+  connectionFamily: z.string().min(1).optional(),
 });
 
 export const CatalogSchema = z.object({
@@ -53,6 +56,22 @@ export const AccessorySchema = z.object({
   unit: z.string(),
   commonUses: z.array(z.string()).default([]),
   note: z.string().optional(),
+  connectionFamily: z.string().min(1).optional(),
+  mounting: z.enum(["profile-profile", "profile-panel"]).optional(),
+  components: z.array(z.strictObject({
+    name: z.string().min(1),
+    qty: z.number().int().positive(),
+    spec: z.string().optional(),
+  })).optional(),
+  sourceUrl: z.url().optional(),
+  /** 外置角码示意；局部 x=0、y=0 是两个外安装面，沿 +x、+y 延伸。 */
+  visual: z.strictObject({
+    kind: z.literal("angle-bracket"),
+    size: vec3.refine((size) => size.every((value) => value > 0), "角码尺寸须为正数"),
+    thickness: z.number().positive(),
+    holeDiameter: z.number().positive(),
+  }).refine(({ size, thickness, holeDiameter }) => thickness < Math.min(...size) / 2
+    && holeDiameter < Math.min(...size) - thickness * 2, "角码厚度或孔径超出尺寸范围").optional(),
 });
 
 export const AccessoryCatalogSchema = z.object({
@@ -95,10 +114,25 @@ export const PartSchema = z.strictObject({
   note: z.string().optional(),
 });
 
+export const AccessoryInstanceSchema = z.strictObject({
+  id: IdSchema,
+  /** 装配态世界坐标（mm）；两安装面的交线中心。 */
+  position: vec3,
+  rotation: vec3.default([0, 0, 0]),
+  /** 拆解时跟随此构件，不对两个构件的位移取平均。 */
+  anchorPartId: IdSchema,
+  /** 依次为局部 x=0 面与 y=0 面连接的构件。 */
+  partIds: z.tuple([IdSchema, IdSchema]),
+  note: z.string().optional(),
+});
+
 export const DesignAccessorySchema = z.strictObject({
   ref: z.string().min(1),
   qty: z.number().int().positive(),
   note: z.string().optional(),
+  instances: z.array(AccessoryInstanceSchema).min(1).optional(),
+}).refine((item) => !item.instances || item.qty === item.instances.length, {
+  path: ["qty"], message: "有安装实例时，采购数量必须等于实例数量（套件内含件不重复计数）",
 });
 
 export const DesignMetaSchema = z.strictObject({
@@ -132,6 +166,7 @@ export type PartKind = z.infer<typeof PartKindSchema>;
 export type Part = z.infer<typeof PartSchema>;
 export type DesignMeta = z.infer<typeof DesignMetaSchema>;
 export type Design = z.infer<typeof DesignSchema>;
+export type AccessoryInstance = z.infer<typeof AccessoryInstanceSchema>;
 
 /**
  * 跨文件的引用校验：零件引用的型材必须在 catalog 中存在，
@@ -170,5 +205,6 @@ export function validateReferences(
     errors.push(`零件 id 重复: ${[...new Set(dupes)].join(", ")}`);
   }
 
+  errors.push(...inspectAccessoryConnections(design, catalog, accessories).map((issue) => `${issue.path}: ${issue.message}`));
   return errors;
 }
