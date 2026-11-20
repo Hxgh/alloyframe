@@ -150,6 +150,33 @@ test("坏 JSON、id/文件名不一致与引用损坏保留 invalid 摘要，坏
   assert.equal(await fs.readFile(path.join(root, "archive/broken.json"), "utf8"), "{broken");
 });
 
+test("getRawProject 供修复界面读取原文与问题，saveProject 就地修复校验失败的文件", async (t) => {
+  const { root, store } = await fixture(t);
+  await fs.mkdir(path.join(root, "designs"));
+  // 引用损坏：可解析但校验失败，是修复界面的典型场景。
+  const broken = JSON.stringify({ ...designJson, id: "missing-ref", accessories: [{ ref: "absent", qty: 1 }] });
+  await fs.writeFile(path.join(root, "designs/missing-ref.json"), broken);
+
+  const raw = await store.getRawProject("missing-ref");
+  assert.equal(raw.text, broken);
+  assert.ok(raw.issues.some((issue) => issue.path === "accessories.0.ref" && /不在配件库中/.test(issue.message)));
+  await assert.rejects(store.getProject("missing-ref"), status(400));
+
+  // 修复：移除坏引用后保存，revision 从原文递增，指纹更新。
+  const fixed = await store.saveProject("missing-ref", { ...designJson, id: "missing-ref", accessories: [] }, raw.fingerprint);
+  assert.equal(fixed.design.revision, designJson.revision + 1);
+  assert.deepEqual(await store.getProject("missing-ref"), fixed);
+  // 修复后 getRawProject 不再报错。
+  const clean = await store.getRawProject("missing-ref");
+  assert.deepEqual(clean.issues, []);
+
+  // 修复保存仍是写路径：指纹过期返回 409，不改动文件。
+  await assert.rejects(store.saveProject("missing-ref", { ...designJson, id: "missing-ref" }, raw.fingerprint), status(409));
+  assert.deepEqual(await store.getProject("missing-ref"), fixed);
+  // 新设计本身非法仍被拒绝，不会写入坏数据。
+  await assert.rejects(store.saveProject("missing-ref", { ...designJson, id: "other" }, fixed.fingerprint), status(400));
+});
+
 test("校验失败不写文件、API id 与 design id 必须一致、缺失项目404、非法路径400", async (t) => {
   const { root, store } = await fixture(t);
   const initial = await store.createProject("校验");
@@ -362,7 +389,7 @@ test("CLI 复用共享校验：空项目 warning 退出0；id 不匹配、旋转
   assert.equal(run("../outside").status, 1);
 });
 
-test("坏 UTF-8 标记 invalid，保存/改名拒绝且归档/恢复保留原始字节", async (t) => {
+test("坏 UTF-8 标记 invalid，getRawProject 返回问题原文，saveProject 可就地修复，归档/恢复保留原始字节", async (t) => {
   const { root, store } = await fixture(t);
   const initial = await store.createProject("坏编码");
   const id = initial.design.id;
@@ -378,19 +405,31 @@ test("坏 UTF-8 标记 invalid，保存/改名拒绝且归档/恢复保留原始
   const badEncoding = (error: unknown) => status(400)(error)
     && error instanceof ProjectStoreError && error.issues?.[0].path === "(根)";
   await assert.rejects(store.getProject(id), badEncoding);
-  await assert.rejects(store.saveProject(id, initial.design, invalid.fingerprint), badEncoding);
   await assert.rejects(store.renameProject(id, "不能重写", invalid.fingerprint), badEncoding);
   assert.deepEqual(await fs.readFile(file), original);
-  assert.deepEqual(await fs.readdir(path.join(root, "designs")), [`${id}.json`]);
 
-  await store.archiveProject(id, invalid.fingerprint);
-  assert.deepEqual(await fs.readFile(path.join(root, "archive", `${id}.json`)), original);
+  // 修复通道：原文与问题列表可读（坏编码不返回原文文本）。
+  const raw = await store.getRawProject(id);
+  assert.equal(raw.text, "");
+  assert.equal(raw.fingerprint, invalid.fingerprint);
+  assert.ok(raw.issues.some((issue) => /UTF-8/.test(issue.message)));
+
+  // saveProject 是修复通道：不解析源文件，只要指纹匹配且新设计合法即可就地修复。
+  const repaired = await store.saveProject(id, { ...initial.design, meta: { note: "fixed" } }, invalid.fingerprint);
+  assert.equal(repaired.design.revision, initial.design.revision + 1);
+  assert.deepEqual(await store.getProject(id), repaired);
+  assert.notDeepEqual(await fs.readFile(file), original);
+
+  // 归档/恢复仍保留未修复的原始字节。
+  const before = await fs.readFile(file);
+  await store.archiveProject(id, repaired.fingerprint);
+  assert.deepEqual(await fs.readFile(path.join(root, "archive", `${id}.json`)), before);
   const archived = (await store.getProjectLibrary()).archived[0];
-  assert.equal(archived.status, "invalid");
-  assert.equal(archived.fingerprint, invalid.fingerprint);
+  assert.equal(archived.status, "empty"); // 修复后是零零件的空项目，不再是 invalid
+  assert.equal(archived.fingerprint, repaired.fingerprint);
   await store.restoreProject(id, archived.fingerprint);
-  assert.deepEqual(await fs.readFile(file), original);
-  await assert.rejects(store.getProject(id), badEncoding);
+  assert.deepEqual(await fs.readFile(file), before);
+  assert.deepEqual(await store.getProject(id), repaired);
 });
 
 test("revision 递增允许最大安全整数，溢出保存/改名拒绝且原文件不变", async (t) => {
@@ -423,7 +462,7 @@ test("单件中心或整体半径非有限时导入/保存拒绝且不写文件"
   const initial = await store.createProject("有限几何");
   const file = path.join(root, "designs", `${initial.design.id}.json`);
   const original = await fs.readFile(file);
-  const box = { id: "box", kind: "box", role: "方块", material: "wood", size: [100, 100, 100], position: [0, 100, 0] };
+  const box = { id: "box", kind: "box", role: "方块", material: "wood", size: [100, 100, 100], position: [0, 100, 0], massKg: 2 };
   const candidates = [
     [{ ...box, position: [1e308, 100, 0] }],
     [-1, 1].map((sign) => ({ ...box, id: sign < 0 ? "left" : "right", position: [sign * 1e154, 100, 0] })),

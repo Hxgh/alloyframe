@@ -1,5 +1,5 @@
 import { io } from "next/cache";
-import { archiveProject, getProject, getStoreWritable, renameProject, restoreProject, saveProject } from "@/lib/project-store";
+import { archiveProject, getProject, getRawProject, getStoreWritable, renameProject, restoreProject, saveProject } from "@/lib/project-store";
 import { assertWriteRequest, canWriteRequest, projectErrorResponse, projectJson, readProjectJson, SaveProjectRequestSchema, UpdateProjectRequestSchema } from "@/lib/project-http";
 
 type Context = { params: Promise<{ id: string }> };
@@ -8,7 +8,12 @@ export async function GET(request: Request, context: Context) {
   await io();
   try {
     const { id } = await context.params;
-    const archived = new URL(request.url).searchParams.get("archived") === "true";
+    const url = new URL(request.url);
+    const archived = url.searchParams.get("archived") === "true";
+    // ?raw=true 返回原文与校验问题（不要求有效），供无效项目的修复界面使用。
+    if (url.searchParams.get("raw") === "true") {
+      return projectJson({ raw: await getRawProject(id, archived), writable: getStoreWritable() && canWriteRequest(request) });
+    }
     return projectJson({ project: await getProject(id, archived), writable: getStoreWritable() && canWriteRequest(request) });
   } catch (error) { return projectErrorResponse(error); }
 }

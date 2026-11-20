@@ -80,7 +80,7 @@ export function partMassKg(part: Part, profile: Profile | undefined): number {
   }
   const [sx, sy, sz] = part.size;
   const volumeM3 = (sx * sy * sz) / 1e9;
-  // 木材约 650，其它默认按铝 2700
-  const density = /木/.test(part.material) ? 650 : 2700;
+  // 木材约 650，钢约 7850，其它默认按铝 2700（实心估算，空心件须用 massKg 覆盖）
+  const density = /木/.test(part.material) ? 650 : /钢|铁|不锈/.test(part.material) ? 7850 : 2700;
   return volumeM3 * density;
 }

@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type FormEvent } from "react";
-import { Archive, ArrowUpRight, Copy, FileJson, FolderOpen, Plus, RotateCcw } from "lucide-react";
+import { Archive, ArrowUpRight, Copy, FileJson, FolderOpen, Plus, RotateCcw, X } from "lucide-react";
 import type { ProjectLibrary as Library, ProjectRecord, ProjectSummary } from "@/lib/projects";
 import { createProjectImportReader, ProjectRequestError, projectRequest } from "@/lib/project-client";
 import { PROJECT_TEMPLATES, type ProjectTemplateId } from "@/lib/project-templates";
@@ -11,11 +11,12 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
+import { IconButton } from "@/components/ui/icon-button";
 import { ThemeSelect } from "@/components/ThemeSelect";
 import { ConfirmDialog } from "./ConfirmDialog";
 
 type Props = { initial: Library };
-type FormMode = { type: "create"; templateId?: ProjectTemplateId } | { type: "import" } | { type: "rename"; project: ProjectSummary };
 const dateFormat = new Intl.DateTimeFormat("zh-CN", { dateStyle: "medium", timeZone: "UTC" });
 
 export function ProjectLibrary({ initial }: Props) {
@@ -27,14 +28,18 @@ export function ProjectLibrary({ initial }: Props) {
   const [writeRejected, setWriteRejected] = useState(false);
   const [query, setQuery] = useState("");
   const [archived, setArchived] = useState(false);
-  const [form, setForm] = useState<FormMode | null>(null);
+  const [createOpen, setCreateOpen] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
+  const [renameProject, setRenameProject] = useState<ProjectSummary | null>(null);
   const [name, setName] = useState("");
   const nameEdited = useRef(false);
+  const [templateId, setTemplateId] = useState<ProjectTemplateId>("blank");
   const [json, setJson] = useState("");
+  const [formError, setFormError] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [reading, setReading] = useState(false);
-  const [importReader] = useState(() => createProjectImportReader({ onText: setJson, onError: setError, onPending: setReading }));
+  const [importReader] = useState(() => createProjectImportReader({ onText: setJson, onError: setFormError, onPending: setReading }));
   const [archive, setArchive] = useState<ProjectSummary | null>(null);
   const active = useRef(false);
   const activityEpoch = useRef(0);
@@ -62,40 +67,83 @@ export function ProjectLibrary({ initial }: Props) {
     return () => { window.clearTimeout(timer); window.removeEventListener("focus", onFocus); };
   }, [refresh]);
 
-  function showForm(value: FormMode) {
-    importReader.cancel();
-    setForm(value);
+  function openCreateDialog(tplId?: ProjectTemplateId) {
+    const template = tplId ? PROJECT_TEMPLATES.find((t) => t.id === tplId) : PROJECT_TEMPLATES[0];
+    setTemplateId(template?.id ?? "blank");
+    setName(template && template.id !== "blank" ? template.label : "");
     nameEdited.current = false;
-    setName(value.type === "rename" ? value.project.name : "");
-    setJson("");
-    setError("");
+    setFormError("");
+    setCreateOpen(true);
   }
 
-  async function submit(event: FormEvent) {
+  function openImportDialog() {
+    importReader.cancel();
+    setName("");
+    setJson("");
+    nameEdited.current = false;
+    setFormError("");
+    setImportOpen(true);
+  }
+
+  function openRenameDialog(project: ProjectSummary) {
+    setRenameProject(project);
+    setName(project.name);
+    nameEdited.current = false;
+    setFormError("");
+  }
+
+  async function submitCreate(event: FormEvent) {
     event.preventDefault();
-    if (!form || busy || importReader.pending) return;
+    if (busy) return;
     const epoch = activityEpoch.current;
     setBusy(true);
-    setError("");
+    setFormError("");
     try {
-      if (form.type === "rename") {
-        await projectRequest(`/api/projects/${form.project.id}`, { method: "PATCH", body: JSON.stringify({ action: "rename", name, fingerprint: form.project.fingerprint }) });
-      } else {
-        const body = form.type === "import"
-          ? { action: "import", design: JSON.parse(json), name: name.trim() || undefined }
-          : { action: "create", name, ...(form.templateId && form.templateId !== "blank" ? { templateId: form.templateId } : {}) };
-        const project = await projectRequest<ProjectRecord>("/api/projects", { method: "POST", body: JSON.stringify(body) });
-        setForm(null);
-        setName("");
-        setJson("");
-        if (active.current && epoch === activityEpoch.current) router.push(`/projects/${project.design.id}`);
-        return;
-      }
-      setForm(null);
+      const body = { action: "create", name, ...(templateId && templateId !== "blank" ? { templateId } : {}) };
+      const project = await projectRequest<ProjectRecord>("/api/projects", { method: "POST", body: JSON.stringify(body) });
+      setCreateOpen(false);
+      if (active.current && epoch === activityEpoch.current) router.push(`/projects/${project.design.id}`);
+    } catch (cause) {
+      if (cause instanceof ProjectRequestError && cause.status === 403) setWriteRejected(true);
+      setFormError((cause as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function submitImport(event: FormEvent) {
+    event.preventDefault();
+    if (busy || importReader.pending) return;
+    const epoch = activityEpoch.current;
+    setBusy(true);
+    setFormError("");
+    try {
+      const body = { action: "import", design: JSON.parse(json), name: name.trim() || undefined };
+      const project = await projectRequest<ProjectRecord>("/api/projects", { method: "POST", body: JSON.stringify(body) });
+      setImportOpen(false);
+      setName("");
+      setJson("");
+      if (active.current && epoch === activityEpoch.current) router.push(`/projects/${project.design.id}`);
+    } catch (cause) {
+      if (cause instanceof ProjectRequestError && cause.status === 403) setWriteRejected(true);
+      setFormError(cause instanceof SyntaxError ? "JSON 无法解析，请检查逗号、引号和括号。" : (cause as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function submitRename(event: FormEvent) {
+    event.preventDefault();
+    if (!renameProject || busy) return;
+    setBusy(true);
+    setFormError("");
+    try {
+      await projectRequest(`/api/projects/${renameProject.id}`, { method: "PATCH", body: JSON.stringify({ action: "rename", name, fingerprint: renameProject.fingerprint }) });
+      setRenameProject(null);
       await refresh();
     } catch (cause) {
       if (cause instanceof ProjectRequestError && cause.status === 403) setWriteRejected(true);
-      setError(cause instanceof SyntaxError ? "JSON 无法解析，请检查逗号、引号和括号。" : (cause as Error).message);
+      setFormError((cause as Error).message);
     } finally {
       setBusy(false);
     }
@@ -137,8 +185,8 @@ export function ProjectLibrary({ initial }: Props) {
               <p className="text-sm leading-6 text-muted-foreground">新建项目，或导入已有设计。</p>
             </div>
             <div className="flex flex-wrap gap-2">
-              <Button variant="outline" size="touch" disabled={!writable || busy} onClick={() => showForm({ type: "import" })}><FileJson className="size-4" />导入 JSON</Button>
-              <Button size="touch" disabled={!writable || busy} onClick={() => showForm({ type: "create" })}><Plus className="size-4" />新建项目</Button>
+              <Button variant="outline" size="touch" disabled={!writable || busy} onClick={() => openImportDialog()}><FileJson className="size-4" />导入 JSON</Button>
+              <Button size="touch" disabled={!writable || busy} onClick={() => openCreateDialog()}><Plus className="size-4" />新建项目</Button>
             </div>
           </section>
           {!writable && !checkError && <p role="status" className="rounded-lg border bg-muted/40 p-3 text-xs leading-5 text-muted-foreground">

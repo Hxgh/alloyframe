@@ -28,7 +28,7 @@ pnpm validate
 pnpm build
 ```
 
-CI 使用同样的顺序；`pnpm build` 需要能获取 `next/font/google` 的字体资源。无法运行某项检查时，请说明原因和未覆盖的风险，不要将其描述为通过。
+CI 使用同样的顺序，并额外运行一次 `ALLOYFRAME_DATA_DIR="$PWD/data" pnpm validate` 校验仓库内的公开数据（测试会断言 `initialFiles` 与 `data/` 树同步，新增公开文件时须同步更新 `src/lib/data-root.ts` 的清单）；`pnpm build` 需要能获取 `next/font/google` 的字体资源。无法运行某项检查时，请说明原因和未覆盖的风险，不要将其描述为通过。
 
 ## 提交内容
 

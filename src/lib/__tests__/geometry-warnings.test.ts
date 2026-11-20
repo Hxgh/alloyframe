@@ -13,10 +13,10 @@ const design = (parts: unknown[], extra = {}) => ({
   id: "geometry-test", name: "几何校验", units: "mm", parts, ...extra,
 });
 const box = (id: string, position = [0, 10, 0], extra = {}) => ({
-  id, kind: "box", role: "方块", material: "钢", size: [20, 20, 20], position, ...extra,
+  id, kind: "box", role: "方块", material: "钢", size: [20, 20, 20], position, massKg: 0.2, ...extra,
 });
 const column = (id: string, size: number[], position: number[], rotation = [0, 0, 0]) => ({
-  id, kind: "column", role: "柱", material: "钢", size, position, rotation,
+  id, kind: "column", role: "柱", material: "钢", size, position, rotation, massKg: 3,
 });
 const interferences = (issues: ReturnType<typeof inspect>["issues"]) =>
   issues.filter((issue) => issue.level === "warning" && issue.message.includes("空间干涉"));

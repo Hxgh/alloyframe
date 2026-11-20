@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
-import { CatalogSchema, AccessoryCatalogSchema, DesignSchema, validateReferences } from "@/lib/schema";
+import { CatalogSchema, AccessoryCatalogSchema, DesignSchema, IdSchema, validateReferences } from "@/lib/schema";
 import { getDataRoot } from "@/lib/data-root";
 import type { AccessoryCatalog, Catalog, Design } from "@/lib/schema";
 
@@ -12,12 +12,12 @@ import type { AccessoryCatalog, Catalog, Design } from "@/lib/schema";
  * ALLOYFRAME_DATA_DIR 可指定绝对数据目录，由 getDataRoot 统一解析。
  */
 
-const DATA_ROOT = getDataRoot();
-
+// 每次调用重新解析数据根，避免环境变量变更后模块级常量固化旧目录。
 function readJson(file: string): unknown {
-  const full = path.join(DATA_ROOT, file);
+  const full = path.join(getDataRoot(), file);
   if (!fs.existsSync(full)) {
-    throw new Error(`数据文件不存在: ${full}`);
+    // 不回传服务器绝对路径，只描述缺失的相对位置。
+    throw new Error(`数据文件不存在: ${file}`);
   }
   return JSON.parse(fs.readFileSync(full, "utf8"));
 }
@@ -31,6 +31,7 @@ export function loadAccessories(): AccessoryCatalog {
 }
 
 export function loadDesign(id: string): Design {
+  if (!IdSchema.safeParse(id).success) throw new Error("无效的设计 id，不能包含路径片段");
   const design = DesignSchema.parse(readJson(`designs/${id}.json`));
   const errors = validateReferences(design, loadCatalog(), loadAccessories());
   if (errors.length > 0) {
@@ -40,12 +41,13 @@ export function loadDesign(id: string): Design {
 }
 
 export function listDesigns(): string[] {
-  const dir = path.join(DATA_ROOT, "designs");
+  const dir = path.join(getDataRoot(), "designs");
   if (!fs.existsSync(dir)) return [];
   return fs
     .readdirSync(dir)
     .filter((f) => f.endsWith(".json"))
-    .map((f) => f.replace(/\.json$/, ""));
+    .map((f) => f.replace(/\.json$/, ""))
+    .filter((id) => IdSchema.safeParse(id).success);
 }
 
 /**

@@ -11,7 +11,12 @@ export class ProjectStoreError extends Error {
   }
 }
 
-const initialFiles = [
+/**
+ * 首次初始化时从公开 `data/` 复制的文件清单。
+ * 与 `data/` 树保持同步：新增或删除公开文件时须同步更新，
+ * 否则该文件不会被初始化复制，也不会被 CI 的公开数据校验覆盖。
+ */
+export const initialFiles = [
   "design.schema.json",
   "catalog/profiles.json",
   "catalog/profiles.schema.json",

@@ -185,6 +185,10 @@ export function inspectDesign(
     } else if (part.profile) {
       error("profile", `kind=${part.kind} 不应指定 profile`);
     }
+    // 外购件（column/box）多为空心件，按实心包围盒估重会严重偏重，必须提供实测重量。
+    if ((part.kind === "column" || part.kind === "box") && part.massKg == null) {
+      error("massKg", `kind=${part.kind} 属于外购件，必须填写 massKg 单件重量，避免按实心包围盒估重`);
+    }
 
     // 复用渲染的 Euler 与型材轴向变换，不用未旋转的 size 猜测高度。
     const bounds = designBounds([part]);

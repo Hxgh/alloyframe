@@ -1,16 +1,24 @@
 import Link from "next/link";
 import { Suspense } from "react";
 import { io } from "next/cache";
-import { getProject, getStoreWritable, ProjectStoreError } from "@/lib/project-store";
+import { getProject, getRawProject, getStoreWritable, ProjectStoreError } from "@/lib/project-store";
 import { loadAccessories, loadCatalog } from "@/lib/data";
 import { ProjectEditor } from "@/components/project/ProjectEditor";
+import { ProjectRepair } from "@/components/project/ProjectRepair";
 
 async function Project({ params }: { params: Promise<{ id: string }> }) {
   await io();
   const { id } = await params;
-  const result = await getProject(id).then((initial) => ({ initial, catalog: loadCatalog(), accessories: loadAccessories() })).catch((cause: unknown) => ({ error: cause }));
+  const catalog = loadCatalog();
+  const accessories = loadAccessories();
+  const result = await getProject(id).then((initial) => ({ initial })).catch((cause: unknown) => ({ error: cause }));
   if ("initial" in result) {
-    return <ProjectEditor key={id} initial={result.initial} catalog={result.catalog} accessories={result.accessories} writable={getStoreWritable()} />;
+    return <ProjectEditor key={id} initial={result.initial} catalog={catalog} accessories={accessories} writable={getStoreWritable()} />;
+  }
+  // 校验失败的项目进入修复面板（原文 + 问题列表 + 就地保存）；其余错误仍走错误页。
+  if (result.error instanceof ProjectStoreError && result.error.status === 400) {
+    const raw = await getRawProject(id).catch(() => null);
+    if (raw) return <ProjectRepair key={id} id={id} raw={raw} catalog={catalog} accessories={accessories} writable={getStoreWritable()} />;
   }
   const error = result.error instanceof ProjectStoreError ? result.error : null;
   return <main className="mx-auto grid min-h-dvh max-w-xl content-center gap-4 p-6">

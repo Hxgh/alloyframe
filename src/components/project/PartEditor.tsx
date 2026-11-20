@@ -139,7 +139,8 @@ function PartEditorForm({
         if (error) nextErrors[`${field}.${index}`] = error;
       });
     }
-    const massError = numberError(fields.massKg, "单件重量", { optional: true, positive: true });
+    const massRequired = fields.kind === "column" || fields.kind === "box";
+    const massError = numberError(fields.massKg, "单件重量", { optional: !massRequired, positive: true });
     if (massError) nextErrors.massKg = massError;
 
     const candidate = {
@@ -239,12 +240,13 @@ function PartEditorForm({
             required
           />
         )}
-        <VectorFields id={`${prefix}-size`} path="size" label="尺寸" unit="mm" values={fields.size} onChange={(values) => update("size", values)} errors={errors} disabled={readOnly} positive />
+        <VectorFields id={`${prefix}-size`} path="size" label="尺寸" unit="mm" values={fields.size} onChange={(values) => update("size", values)} errors={errors} disabled={readOnly} positive
+          hint="尺寸即下料长度：夹在立柱或主梁之间的构件，须直接填扣减后的下料尺寸（如 540 = 620 − 2×40），并把算式写进备注；引擎不做端头扣减。" />
         <VectorFields id={`${prefix}-position`} path="position" label="中心点位置" unit="mm" values={fields.position} onChange={(values) => update("position", values)} errors={errors} disabled={readOnly} />
         <VectorFields id={`${prefix}-rotation`} path="rotation" label="旋转" unit="度" values={fields.rotation} onChange={(values) => update("rotation", values)} errors={errors} disabled={readOnly} />
         <TextField
           id={`${prefix}-mass`}
-          label="单件重量（kg，可选）"
+          label={fields.kind === "column" || fields.kind === "box" ? "单件重量（kg，必填）" : "单件重量（kg，可选）"}
           type="number"
           inputMode="decimal"
           step="any"
@@ -253,7 +255,9 @@ function PartEditorForm({
           onChange={(event) => update("massKg", event.target.value)}
           disabled={readOnly}
           error={errors.massKg}
-          hint="留空使用估算重量，不能代替实测或工程校核。"
+          hint={fields.kind === "column" || fields.kind === "box"
+            ? "外购件多为空心件，须填实测或供应商重量，避免按实心包围盒估重。"
+            : "留空使用估算重量，不能代替实测或工程校核。"}
         />
         <FormField id={`${prefix}-note`} label="备注（可选）" error={errors.note}>
           <Textarea

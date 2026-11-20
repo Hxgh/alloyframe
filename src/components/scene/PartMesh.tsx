@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useEffect, useMemo } from "react";
 import type { Part, Profile } from "@/lib/schema";
 import { beamDims, materialLook } from "@/lib/materials";
 import { partRotation, beamGeometry } from "@/lib/tslot";
@@ -31,6 +31,9 @@ export function PartMesh({ part, profile, selected, dimmed, dark, explodeOffset,
     }
     return null;
   }, [part, profile]);
+
+  // 外部创建的 BufferGeometry 不由 R3F 释放；替换或卸载时必须手动 dispose。
+  useEffect(() => () => geometry?.dispose(), [geometry]);
 
   const rotation = partRotation(part);
 

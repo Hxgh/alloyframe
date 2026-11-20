@@ -24,4 +24,6 @@ jobs:
       - run: pnpm lint
       - run: pnpm test
       - run: pnpm validate
+      # 校验仓库中的公开数据（与 AGENTS.md 的数据维护命令一致）；test 已断言 initialFiles 与 data/ 树同步。
+      - run: ALLOYFRAME_DATA_DIR="$PWD/data" pnpm validate
       - run: pnpm build

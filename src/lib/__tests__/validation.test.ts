@@ -93,7 +93,7 @@ test("声明顶面针对整体非空模型：多板结构取最高板，无板�
   const shelves = [plate, { ...plate, id: "upper-shelf", position: [0, 150, 0] }];
   assert.ok(inspect({ ...empty, parts: shelves, meta: { frameHeight: 200 } }).design);
   assert.equal(inspect({ ...empty, parts: shelves, meta: { frameHeight: 100 } }).design, null);
-  const box = { ...plate, kind: "box", rotation: [0, 0, 0], position: [0, 100, 0] };
+  const box = { ...plate, kind: "box", rotation: [0, 0, 0], position: [0, 100, 0], massKg: 3 };
   assert.ok(inspect({ ...empty, parts: [box], meta: { frameHeight: 110 } }).design);
   assert.equal(inspect({ ...empty, parts: [box], meta: { frameHeight: 200 } }).design, null);
 });
@@ -104,10 +104,23 @@ test("schema issue 关联 partId，非有限数值不能进入引擎", () => {
   assert.equal(inspect({ ...empty, parts: [{ ...plate, position: [Infinity, 50, 0] }] }).design, null);
 });
 
+test("column/box 外购件必须填写 massKg，beam/plate 不强制", () => {
+  for (const kind of ["column", "box"] as const) {
+    const missing = inspect({ ...empty, parts: [{ ...plate, id: "part-1", kind, rotation: [0, 0, 0], massKg: undefined }] });
+    assert.equal(missing.design, null, kind);
+    assert.ok(missing.issues.some((issue) => issue.level === "error"
+      && issue.path === "parts.0.massKg" && issue.partId === "part-1" && /必须填写 massKg/.test(issue.message)), kind);
+    assert.ok(inspect({ ...empty, parts: [{ ...plate, id: "part-2", kind, rotation: [0, 0, 0], massKg: 1.5 }] }).design, kind);
+  }
+  // beam/plate 沿用体积估算，不强制填写。
+  assert.ok(inspect({ ...empty, parts: [{ ...plate, id: "part-3", kind: "plate" }] }).design);
+  assert.ok(inspect({ ...empty, parts: [{ ...plate, id: "part-4", kind: "beam", profile: catalog.profiles[0].id }] }).design);
+});
+
 test("单件包围盒 min/max/radius 有限但 center 溢出也拒绝", () => {
   const design = DesignSchema.parse({
     ...empty,
-    parts: [{ id: "box", kind: "box", role: "方块", material: "wood", size: [100, 100, 100], position: [1e308, 100, 0] }],
+    parts: [{ id: "box", kind: "box", role: "方块", material: "wood", size: [100, 100, 100], position: [1e308, 100, 0], massKg: 2 }],
   });
   const bounds = designBounds(design.parts);
   assert.ok([...bounds.min, ...bounds.max, bounds.radius].every(Number.isFinite));
@@ -122,7 +135,7 @@ test("单件包围盒均有限但整体 radius 溢出时拒绝，有无 frameHei
     ...empty,
     parts: [-1, 1].map((sign) => ({
       id: sign < 0 ? "left" : "right", kind: "box", role: "方块", material: "wood",
-      size: [100, 100, 100], position: [sign * 1e154, 100, 0],
+      size: [100, 100, 100], position: [sign * 1e154, 100, 0], massKg: 2,
     })),
   });
   for (const part of design.parts) {
@@ -349,7 +362,7 @@ test("空间防呆检查：型材未做端头扣减产生干涉警告，悬空�
     ...empty,
     parts: [
       {
-        id: "base", kind: "box", role: "底座", material: "钢",
+        id: "base", kind: "box", role: "底座", material: "钢", massKg: 1.5,
         size: [100, 20, 100], position: [0, 10, 0],
       },
       {

@@ -168,6 +168,7 @@ export function VectorFields({
   errors,
   disabled,
   positive,
+  hint,
 }: {
   id: string;
   path: string;
@@ -178,6 +179,7 @@ export function VectorFields({
   errors: FieldErrors;
   disabled?: boolean;
   positive?: boolean;
+  hint?: string;
 }) {
   return (
     <fieldset disabled={disabled} className="vector-fields min-w-0 space-y-2 rounded-lg border border-border bg-muted/20 px-2.5 pt-1 pb-2.5">
@@ -185,6 +187,7 @@ export function VectorFields({
         {label} <span className="text-xs font-normal text-muted-foreground">（{unit}）</span>
         <span className="ml-1 text-xs font-normal text-muted-foreground">（必填）</span>
       </legend>
+      {hint && <p className="text-xs leading-5 text-muted-foreground wrap-anywhere">{hint}</p>}
       <div className="vector-inputs grid min-w-0 gap-2 [&_input]:px-2 [&_input]:font-mono [&_input]:tabular-nums [&_label>span]:sr-only">
         {(["X", "Y", "Z"] as const).map((axis, index) => (
           <TextField

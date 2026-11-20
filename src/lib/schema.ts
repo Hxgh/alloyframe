@@ -109,6 +109,7 @@ export const PartSchema = z.strictObject({
    * 可选：直接指定单件重量（kg）。
    * 空心件（升降柱钢管等）按实心包围盒估算会严重偏重，
    * 这里允许用实测值覆盖。不填则按体积 × 密度估算。
+   * column/box 属外购件，inspectDesign 强制要求填写。
    */
   massKg: z.number().positive().optional(),
   note: z.string().optional(),

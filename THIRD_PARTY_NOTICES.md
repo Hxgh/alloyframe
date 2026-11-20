@@ -15,7 +15,6 @@
 | `next` 16.4.5 | MIT | `node_modules/next/license.md` |
 | `next-themes` 0.4.6 | MIT | `node_modules/next-themes/license.md` |
 | `react` 19.3.0、`react-dom` 19.3.0 | MIT | 各包的 `LICENSE` |
-| `shadcn` 4.23.0 | MIT | `node_modules/shadcn/LICENSE.md`；项目 `components.json` 配置了相关组件体系，已复制组件的具体来源和版本仍需逐项核实 |
 | `sonner` 2.0.8 | MIT | `node_modules/sonner/LICENSE.md` |
 | `three` 0.187.0 | MIT | `node_modules/three/LICENSE` |
 | `tw-animate-css` 1.4.0 | MIT | `node_modules/tw-animate-css/LICENSE` |
@@ -28,9 +27,10 @@
 | 包及本地版本 | 本地包声明的许可 | 本地许可文件或说明 |
 |---|---|---|
 | `@tailwindcss/turbopack` 4.3.4、`tailwindcss` 4.3.4 | MIT | 各包的 `LICENSE` |
-| `@types/node` 20.19.43、`@types/react` 19.3.0、`@types/react-dom` 19.3.0、`@types/three` 0.187.0 | MIT | 各包的 `LICENSE` |
+| `@types/node` 22.20.5、`@types/react` 19.3.0、`@types/react-dom` 19.3.0、`@types/three` 0.187.0 | MIT | 各包的 `LICENSE` |
 | `babel-plugin-react-compiler` 1.0.0 | MIT | 包元数据声明 MIT；已安装包根目录未发现单独的许可文件，完整文本及版权声明待核实 |
 | `eslint` 9.39.5 | MIT | `node_modules/eslint/LICENSE` |
+| `shadcn` 4.23.0 | MIT | `node_modules/shadcn/LICENSE.md`；仅作为开发期脚手架 CLI，不进入运行时构建产物；项目 `components.json` 配置了相关组件体系，已复制组件的具体来源和版本仍需逐项核实 |
 | `eslint-config-next` 16.4.5 | MIT | 包元数据声明 MIT；已安装包根目录未发现单独的许可文件，完整文本及版权声明待核实 |
 | `tsx` 4.23.15 | MIT | `node_modules/tsx/LICENSE` |
 | `typescript` 5.9.3 | Apache-2.0 | `node_modules/typescript/LICENSE.txt` |

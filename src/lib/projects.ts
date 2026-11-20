@@ -7,6 +7,18 @@ export type ProjectRecord = {
   updatedAt: string;
 };
 
+/**
+ * 无效项目的原文读取结果：design 无法解析或校验失败时，
+ * 仍须把文件原文与问题列表交回界面，供用户就地修复。
+ */
+export type RawProject = {
+  /** 文件原文；无法解码为 UTF-8 时为空字符串。 */
+  text: string;
+  fingerprint: string;
+  updatedAt: string;
+  issues: ValidationIssue[];
+};
+
 export type ProjectSummary = {
   id: string;
   name: string;

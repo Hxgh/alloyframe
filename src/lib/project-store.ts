@@ -4,7 +4,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { AccessoryCatalogSchema, CatalogSchema, DesignSchema, IdSchema } from "./schema";
 import type { AccessoryCatalog, Catalog, Design } from "./schema";
-import type { ProjectLibrary, ProjectRecord, ProjectSummary } from "./projects";
+import type { ProjectLibrary, ProjectRecord, ProjectSummary, RawProject, ValidationIssue } from "./projects";
 import { inspectDesign } from "./validation";
 import { getProjectEnv } from "./project-env";
 import { getDataRoot, ProjectStoreError } from "./data-root";
@@ -69,6 +69,15 @@ function nextRevision(revision: number): number {
   const next = revision + 1;
   if (!Number.isSafeInteger(next)) throw new ProjectStoreError(400, "revision 递增超出安全整数范围，不能保存");
   return next;
+}
+
+/** 从原文提取 revision（坏文件尽力取，取不到从 0 起）。 */
+function rawRevision(content: Buffer): number {
+  try {
+    const value: unknown = JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(content));
+    const revision = value && typeof value === "object" && "revision" in value ? (value as { revision: unknown }).revision : undefined;
+    return typeof revision === "number" && Number.isSafeInteger(revision) && revision >= 0 ? revision : 0;
+  } catch { return 0; }
 }
 
 async function directory(dir: string, create = false): Promise<boolean> {
@@ -160,6 +169,40 @@ export function createProjectStore(options: ProjectStoreOptions) {
       design: await validated(parseJson(raw.content), id),
       fingerprint: raw.fingerprint, updatedAt: raw.updatedAt,
     };
+  }
+
+  /**
+   * 无效项目的修复通道：不要求原文通过校验，只返回原文与问题列表。
+   * 与 record() 相同的 id 语法与文件级防护（O_NOFOLLOW、大小上限）。
+   */
+  async function rawRecord(id: string, archived = false): Promise<RawProject> {
+    const raw = await snapshot(id, archived);
+    const issues: ValidationIssue[] = [];
+    let text = "";
+    try {
+      text = new TextDecoder("utf-8", { fatal: true }).decode(raw.content);
+    } catch {
+      issues.push({ level: "error", path: "(根)", message: "文件不是有效的 UTF-8 文本，请用文本编辑器转换编码后重试。" });
+      return { text: "", fingerprint: raw.fingerprint, updatedAt: raw.updatedAt, issues };
+    }
+    let input: unknown;
+    try { input = JSON.parse(text); }
+    catch {
+      issues.push({ level: "error", path: "(根)", message: "JSON 无法解析，请检查引号、逗号和括号。" });
+      return { text, fingerprint: raw.fingerprint, updatedAt: raw.updatedAt, issues };
+    }
+    try {
+      const { catalog: profiles, accessories: items } = await catalogs();
+      const result = inspectDesign(input, profiles, items);
+      issues.push(...result.issues);
+      if (result.design && result.design.id !== id) {
+        issues.push({ level: "error", path: "id", message: `设计 id "${result.design.id}" 与文件名 "${id}" 不一致` });
+      }
+    } catch (error) {
+      if (!(error instanceof ProjectStoreError)) throw error;
+      issues.push({ level: "error", path: "(根)", message: error.message });
+    }
+    return { text, fingerprint: raw.fingerprint, updatedAt: raw.updatedAt, issues };
   }
 
   async function exists(id: string, archived: boolean): Promise<boolean> {
@@ -269,6 +312,7 @@ export function createProjectStore(options: ProjectStoreOptions) {
       projects: await summaries(false), archived: await summaries(true), writable: writable(),
     })),
     getProject: (id: string, archived = false) => serialize(root, () => record(id, archived)),
+    getRawProject: (id: string, archived = false) => serialize(root, () => rawRecord(id, archived)),
     createProject: (name: string, templateId: ProjectTemplateId = "blank") => serialize(root, async () => {
       assertWritable();
       const candidate = buildTemplateDesign(projectName(name), templateId);
@@ -286,10 +330,11 @@ export function createProjectStore(options: ProjectStoreOptions) {
     }),
     saveProject: (id: string, input: unknown, expected: string) => serialize(root, async () => {
       assertWritable();
-      const source = await record(id, false, expected);
-      checkFingerprint(source.fingerprint, expected);
+      // 源文件可无效（修复场景）：指纹核对保序，revision 尽力从原文取，设计本身仍须完全通过校验。
+      const raw = await snapshot(id, false);
+      checkFingerprint(raw.fingerprint, expected);
       const design = await validated(input, id);
-      return atomicWrite(id, { ...design, revision: nextRevision(source.design.revision) }, expected);
+      return atomicWrite(id, { ...design, revision: nextRevision(rawRevision(raw.content)) }, expected);
     }),
     renameProject: (id: string, name: string, expected: string) => serialize(root, async () => {
       assertWritable();
@@ -306,6 +351,7 @@ function defaultStore() { return createProjectStore({ root: getDataRoot() }); }
 
 export const getProjectLibrary = (): Promise<ProjectLibrary> => defaultStore().getProjectLibrary();
 export const getProject = (id: string, archived = false): Promise<ProjectRecord> => defaultStore().getProject(id, archived);
+export const getRawProject = (id: string, archived = false): Promise<RawProject> => defaultStore().getRawProject(id, archived);
 export const createProject = (name: string, templateId?: ProjectTemplateId): Promise<ProjectRecord> => defaultStore().createProject(name, templateId);
 export const importProject = (input: unknown, name?: string): Promise<ProjectRecord> => defaultStore().importProject(input, name);
 export const copyProject = (id: string, name?: string, expected?: string): Promise<ProjectRecord> => defaultStore().copyProject(id, name, expected);

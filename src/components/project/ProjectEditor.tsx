@@ -594,7 +594,7 @@ export function ProjectEditor({ initial, catalog, accessories, writable: initial
     if (Object.values(live.pendingForms).some(Boolean)) { update({ error: unappliedFieldsWarning }); return; }
     if (filesBlocked()) return;
     const result = analyzeText(live.text);
-    if (!result.design) { update({ error: "当前 JSON 无效，请先修复后导出项目。原文仍保留，可在 JSON 数据区域复制。" }); return; }
+    if (!result.design) { update({ error: "当前 JSON 无效，请先修复后导出项目。原文仍保留，可在「项目 → 高级 JSON」区域复制。" }); return; }
     const exported = captureProjectExport(result.design, live.saved);
     downloadJson(exported.filename, exported.design);
     update({ notice: exported.draft ? "已导出当前有效 JSON 草稿；仅下载副本，未写入正式文件。" : "已导出上次成功保存的设计；仅下载副本，未写入正式文件。" });
@@ -685,7 +685,7 @@ export function ProjectEditor({ initial, catalog, accessories, writable: initial
       {pending && <div className="project-message border-b bg-muted/50 px-3 py-2 text-xs leading-relaxed" role="status">{unappliedFieldsWarning}保存、导出、另存副本、归档及高级 JSON 编辑已暂停；切换面板不会丢弃输入。</div>}
       {(error || saveError || checkError || storageError || preferenceError || notice) && <div className="project-message border-b px-3 py-2 text-xs leading-relaxed" role={error || saveError || checkError || storageError || preferenceError ? "alert" : "status"}>{error && <p className="text-destructive wrap-anywhere">{error}</p>}{saveError && <p className="text-destructive wrap-anywhere">{saveError}保存失败，自动保存已暂停，草稿保留；检查文件并满足权限及其他保存条件后可手动重试。</p>}{checkError && <p className="text-destructive wrap-anywhere">{checkError}文件检查失败，保存已暂停；处理其他阻塞后可在顶部项目操作中重新检查。</p>}{storageError && <p className="text-destructive">{storageError}</p>}{preferenceError && <p className="text-destructive">{preferenceError}</p>}{notice && <p>{notice}</p>}</div>}
       {(remote || conflict) && <div className="project-message flex flex-wrap items-center gap-2 border-b bg-muted/50 px-3 py-2 text-xs"><p className="min-w-0 flex-1 leading-relaxed">文件发生冲突，自动保存已暂停，当前草稿不会被覆盖。{remote ? "可在条件允许时载入文件版本。" : "新文件版本尚未读取成功，请在条件允许时检查文件更新。"}</p><Button size="touch" variant="outline" disabled={saveBlocked || !remote} onClick={() => askConfirmation("reload")}>载入文件版本</Button><Button size="touch" variant="ghost" disabled={!analysis.design || !writable || saveBlocked || pending} title={pending ? unappliedFieldsWarning : !writable ? "当前写入不可用，另存副本需要写入权限。" : undefined} onClick={() => { void copy(); }}>另存副本</Button></div>}
-      {!analysis.design && <div className="project-message border-b border-destructive/30 bg-destructive/5 px-3 py-2 text-xs leading-relaxed text-destructive" role="alert">当前数据未通过校验，画布保留最近有效预览；手动与自动保存、算料与导出已暂停。到「项目 → JSON 数据」修复。</div>}
+      {!analysis.design && <div className="project-message border-b border-destructive/30 bg-destructive/5 px-3 py-2 text-xs leading-relaxed text-destructive" role="alert">当前数据未通过校验，画布保留最近有效预览；手动与自动保存、算料与导出已暂停。到「项目 → 高级 JSON」修复。</div>}
     </>
   );
 
