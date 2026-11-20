@@ -64,6 +64,30 @@ export function ProjectLibrary({ initial }: Props) {
     return () => { window.clearTimeout(timer); window.removeEventListener("focus", onFocus); };
   }, [refresh]);
 
+  function openForm(next: FormMode) {
+    importReader.cancel();
+    setForm(next);
+    nameEdited.current = false;
+    setError("");
+    if (next.type === "rename") {
+      setName(next.project.name);
+    } else if (next.type === "create") {
+      const template = next.templateId ? PROJECT_TEMPLATES.find((t) => t.id === next.templateId) : undefined;
+      setName(template && template.id !== "blank" ? template.label : "");
+    } else {
+      setName("");
+      setJson("");
+    }
+  }
+
+  function closeForm() {
+    if (busy) return;
+    importReader.cancel();
+    setForm(null);
+    nameEdited.current = false;
+    setError("");
+  }
+
   async function submit(event: FormEvent) {
     event.preventDefault();
     if (!form || busy || (form.type === "import" && importReader.pending)) return;
@@ -130,8 +154,8 @@ export function ProjectLibrary({ initial }: Props) {
               <p className="text-sm leading-6 text-muted-foreground">新建项目，或导入已有设计。</p>
             </div>
             <div className="flex flex-wrap gap-2">
-              <Button variant="outline" size="touch" disabled={!writable || busy} onClick={() => { importReader.cancel(); setForm({ type: "import" }); setName(""); setJson(""); }}><FileJson className="size-4" />导入 JSON</Button>
-              <Button size="touch" disabled={!writable || busy} onClick={() => { setForm({ type: "create" }); setName(""); }}><Plus className="size-4" />新建项目</Button>
+              <Button variant="outline" size="touch" disabled={!writable || busy} onClick={() => openForm({ type: "import" })}><FileJson className="size-4" />导入 JSON</Button>
+              <Button size="touch" disabled={!writable || busy} onClick={() => openForm({ type: "create" })}><Plus className="size-4" />新建项目</Button>
             </div>
           </section>
           {!writable && !checkError && <p role="status" className="rounded-lg border bg-muted/40 p-3 text-xs leading-5 text-muted-foreground">
@@ -140,11 +164,11 @@ export function ProjectLibrary({ initial }: Props) {
           {writeRejected && <p role="status" className="rounded-lg border bg-muted/40 p-3 text-xs leading-5 text-muted-foreground">上次写入被拒绝，请检查服务权限。</p>}
           {checkError && <p role="alert" className="rounded-lg border border-destructive/40 bg-destructive/5 p-3 text-sm leading-6 text-destructive wrap-anywhere">项目库检查失败：{checkError}切回页面可重试。</p>}
           {error && <p role="alert" className="rounded-lg border border-destructive/40 bg-destructive/5 p-3 text-sm leading-6 text-destructive wrap-anywhere">{error}</p>}
-          <Dialog open={form !== null} onOpenChange={(open) => { if (!open && !busy) { importReader.cancel(); setForm(null); } }} modal>
+          <Dialog open={form !== null} onOpenChange={(open) => { if (!open) closeForm(); }} modal>
             <DialogContent>
               <div className="flex items-center justify-between gap-2">
                 <DialogTitle>{form?.type === "create" ? "新建项目" : form?.type === "import" ? "导入为新项目" : "重命名项目"}</DialogTitle>
-                <IconButton label="关闭" onClick={() => { if (!busy) { importReader.cancel(); setForm(null); } }}><X className="size-4" /></IconButton>
+                <IconButton label="关闭" onClick={closeForm}><X className="size-4" /></IconButton>
               </div>
               <DialogDescription>
                 {form?.type === "create" && "填写项目名称，选择起始模板。"}
@@ -197,7 +221,7 @@ export function ProjectLibrary({ initial }: Props) {
                   {reading && <p role="status" className="text-xs leading-5 text-muted-foreground">正在读取 JSON 文件，读取完成前不会提交导入；也可直接粘贴内容以取消读取。</p>}
                   <p className="text-xs leading-5 text-muted-foreground">会生成新 ID，不覆盖已有项目。JSON 引用的型材和配件必须存在于当前共享目录库中。</p>
                 </>}
-                <div className="flex gap-2 border-t pt-3"><Button type="submit" size="touch" disabled={busy || reading || !writable}>{busy ? "处理中…" : form?.type === "import" ? "校验并导入" : form?.type === "rename" ? "保存" : "创建"}</Button><Button type="button" variant="outline" size="touch" disabled={busy} onClick={() => { importReader.cancel(); setForm(null); }}>取消</Button></div>
+                <div className="flex gap-2 border-t pt-3"><Button type="submit" size="touch" disabled={busy || reading || !writable}>{busy ? "处理中…" : form?.type === "import" ? "校验并导入" : form?.type === "rename" ? "保存" : "创建"}</Button><Button type="button" variant="outline" size="touch" disabled={busy} onClick={closeForm}>取消</Button></div>
               </form>
             </DialogContent>
           </Dialog>
@@ -210,7 +234,7 @@ export function ProjectLibrary({ initial }: Props) {
               {PROJECT_TEMPLATES.filter((item) => item.id !== "blank").map((item) => <article key={item.id} className="flex min-w-0 flex-col gap-2 rounded-lg border bg-background p-3">
                 <h3 className="text-sm font-medium">{item.label}</h3>
                 <p className="flex-1 text-xs leading-5 text-muted-foreground">{item.summary}</p>
-                <Button size="touch" variant="outline" disabled={!writable || busy} onClick={() => { setForm({ type: "create", templateId: item.id }); setName(item.label); }}>以此示例新建<ArrowUpRight className="size-4" /></Button>
+                <Button size="touch" variant="outline" disabled={!writable || busy} onClick={() => openForm({ type: "create", templateId: item.id })}>以此示例新建<ArrowUpRight className="size-4" /></Button>
               </article>)}
             </div>
           </section>
@@ -235,7 +259,7 @@ export function ProjectLibrary({ initial }: Props) {
                   <div className="mt-auto flex flex-wrap items-center gap-2 border-t pt-3">
                     {!archived && <Link href={`/projects/${project.id}`} prefetch={false} className="inline-flex min-h-[var(--control-height)] items-center gap-2 rounded-lg border border-transparent bg-secondary px-3 py-1.5 text-sm font-medium hover:bg-muted focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50">{project.status === "invalid" ? "查看问题" : "打开项目"}<ArrowUpRight className="size-4" /></Link>}
                     {archived ? <Button size="touch" variant="outline" disabled={!writable || busy} onClick={() => { void action(project, "restore"); }}><RotateCcw className="size-4" />恢复</Button> : <>
-                      <Button size="touch" variant="ghost" disabled={!writable || busy || project.status === "invalid"} onClick={() => setForm({ type: "rename", project })}>重命名</Button>
+                      <Button size="touch" variant="ghost" disabled={!writable || busy || project.status === "invalid"} onClick={() => openForm({ type: "rename", project })}>重命名</Button>
                       <Button size="icon-touch" variant="ghost" aria-label={`复制项目：${project.name}`} title="复制项目" disabled={!writable || busy || project.status === "invalid"} onClick={() => { void action(project, "copy"); }}><Copy className="size-4" /></Button>
                       <Button size="icon-touch" variant="ghost" aria-label={`归档项目：${project.name}`} title="归档项目" disabled={!writable || busy} onClick={() => setArchive(project)}><Archive className="size-4" /></Button>
                     </>}

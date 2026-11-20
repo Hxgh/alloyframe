@@ -429,8 +429,10 @@ async function uiHarness(options: { skipInitialRefresh?: boolean } = {}) {
     useRouter: () => ({ push() {} }), Button, Input, Select,
     SelectContent: pass, SelectItem: pass, SelectTrigger: pass, SelectValue: noop,
     Link: pass, Textarea: noop, ThemeSelect: noop, ConfirmDialog: noop,
+    Dialog: (props: { open?: boolean; children?: ReactNode }) => (props.open ? props.children : null),
+    DialogContent: pass, DialogDescription: pass, DialogTitle: pass, IconButton: pass,
   };
-  for (const icon of ["Archive", "ArrowUpRight", "Copy", "FileJson", "FolderOpen", "Plus", "RotateCcw"]) bindings[icon] = noop;
+  for (const icon of ["Archive", "ArrowUpRight", "Copy", "FileJson", "FolderOpen", "Plus", "RotateCcw", "X"]) bindings[icon] = noop;
   const ProjectLibrary = runInNewContext(componentCode, bindings) as (props: { initial: { projects: []; archived: []; writable: boolean } }) => ReactNode;
   const surface = Object.assign(new EventTarget(), { clientWidth: 800, clientHeight: 600, style: {}, ownerDocument: new EventTarget() });
   const renderer = { domElement: surface, render() {}, setPixelRatio() {}, setSize() {} };
@@ -507,20 +509,20 @@ test("项目库 403、检查失败和表单同时保留，实际可用的写入�
     await ui.submit();
     assert.equal(ui.name(), "保留的输入");
     assert.ok(ui.hasTextMatching(/上次写入被拒绝，请检查服务权限/));
-    assert.equal(ui.canClick("确定"), true);
+    assert.equal(ui.canClick("创建"), true);
     ui.setGetError(new ProjectRequestError("检查断线", 0));
     await ui.focus();
     assert.ok(ui.hasTextMatching(/上次写入被拒绝/));
     assert.ok(ui.hasTextMatching(/项目库检查失败：检查断线/));
     assert.ok(ui.hasTextMatching(/来源不允许写入/));
     assert.equal(ui.name(), "保留的输入");
-    assert.equal(ui.canClick("确定"), true);
+    assert.equal(ui.canClick("创建"), true);
     ui.setGetError();
     ui.setGetWritable(false);
     await ui.focus();
     assert.ok(ui.hasTextMatching(/当前无法写入/));
     assert.ok(ui.hasTextMatching(/上次写入被拒绝/));
-    assert.equal(ui.canClick("确定"), false);
+    assert.equal(ui.canClick("创建"), false);
     assert.equal(ui.name(), "保留的输入");
   } finally { await ui.dispose(); }
 });
