@@ -17,6 +17,7 @@ import { ThemeSelect } from "@/components/ThemeSelect";
 import { ConfirmDialog } from "./ConfirmDialog";
 
 type Props = { initial: Library };
+type FormMode = { type: "create"; templateId?: ProjectTemplateId } | { type: "import" } | { type: "rename"; project: ProjectSummary };
 const dateFormat = new Intl.DateTimeFormat("zh-CN", { dateStyle: "medium", timeZone: "UTC" });
 
 export function ProjectLibrary({ initial }: Props) {
@@ -28,18 +29,14 @@ export function ProjectLibrary({ initial }: Props) {
   const [writeRejected, setWriteRejected] = useState(false);
   const [query, setQuery] = useState("");
   const [archived, setArchived] = useState(false);
-  const [createOpen, setCreateOpen] = useState(false);
-  const [importOpen, setImportOpen] = useState(false);
-  const [renameProject, setRenameProject] = useState<ProjectSummary | null>(null);
+  const [form, setForm] = useState<FormMode | null>(null);
   const [name, setName] = useState("");
   const nameEdited = useRef(false);
-  const [templateId, setTemplateId] = useState<ProjectTemplateId>("blank");
   const [json, setJson] = useState("");
-  const [formError, setFormError] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [reading, setReading] = useState(false);
-  const [importReader] = useState(() => createProjectImportReader({ onText: setJson, onError: setFormError, onPending: setReading }));
+  const [importReader] = useState(() => createProjectImportReader({ onText: setJson, onError: setError, onPending: setReading }));
   const [archive, setArchive] = useState<ProjectSummary | null>(null);
   const active = useRef(false);
   const activityEpoch = useRef(0);
@@ -67,83 +64,31 @@ export function ProjectLibrary({ initial }: Props) {
     return () => { window.clearTimeout(timer); window.removeEventListener("focus", onFocus); };
   }, [refresh]);
 
-  function openCreateDialog(tplId?: ProjectTemplateId) {
-    const template = tplId ? PROJECT_TEMPLATES.find((t) => t.id === tplId) : PROJECT_TEMPLATES[0];
-    setTemplateId(template?.id ?? "blank");
-    setName(template && template.id !== "blank" ? template.label : "");
-    nameEdited.current = false;
-    setFormError("");
-    setCreateOpen(true);
-  }
-
-  function openImportDialog() {
-    importReader.cancel();
-    setName("");
-    setJson("");
-    nameEdited.current = false;
-    setFormError("");
-    setImportOpen(true);
-  }
-
-  function openRenameDialog(project: ProjectSummary) {
-    setRenameProject(project);
-    setName(project.name);
-    nameEdited.current = false;
-    setFormError("");
-  }
-
-  async function submitCreate(event: FormEvent) {
+  async function submit(event: FormEvent) {
     event.preventDefault();
-    if (busy) return;
+    if (!form || busy || (form.type === "import" && importReader.pending)) return;
     const epoch = activityEpoch.current;
     setBusy(true);
-    setFormError("");
+    setError("");
     try {
-      const body = { action: "create", name, ...(templateId && templateId !== "blank" ? { templateId } : {}) };
-      const project = await projectRequest<ProjectRecord>("/api/projects", { method: "POST", body: JSON.stringify(body) });
-      setCreateOpen(false);
-      if (active.current && epoch === activityEpoch.current) router.push(`/projects/${project.design.id}`);
-    } catch (cause) {
-      if (cause instanceof ProjectRequestError && cause.status === 403) setWriteRejected(true);
-      setFormError((cause as Error).message);
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function submitImport(event: FormEvent) {
-    event.preventDefault();
-    if (busy || importReader.pending) return;
-    const epoch = activityEpoch.current;
-    setBusy(true);
-    setFormError("");
-    try {
-      const body = { action: "import", design: JSON.parse(json), name: name.trim() || undefined };
-      const project = await projectRequest<ProjectRecord>("/api/projects", { method: "POST", body: JSON.stringify(body) });
-      setImportOpen(false);
-      setName("");
-      setJson("");
-      if (active.current && epoch === activityEpoch.current) router.push(`/projects/${project.design.id}`);
-    } catch (cause) {
-      if (cause instanceof ProjectRequestError && cause.status === 403) setWriteRejected(true);
-      setFormError(cause instanceof SyntaxError ? "JSON 无法解析，请检查逗号、引号和括号。" : (cause as Error).message);
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function submitRename(event: FormEvent) {
-    event.preventDefault();
-    if (!renameProject || busy) return;
-    setBusy(true);
-    setFormError("");
-    try {
-      await projectRequest(`/api/projects/${renameProject.id}`, { method: "PATCH", body: JSON.stringify({ action: "rename", name, fingerprint: renameProject.fingerprint }) });
-      setRenameProject(null);
+      if (form.type === "rename") {
+        await projectRequest(`/api/projects/${form.project.id}`, { method: "PATCH", body: JSON.stringify({ action: "rename", name, fingerprint: form.project.fingerprint }) });
+      } else {
+        const body = form.type === "import"
+          ? { action: "import", design: JSON.parse(json), name: name.trim() || undefined }
+          : { action: "create", name, ...(form.templateId && form.templateId !== "blank" ? { templateId: form.templateId } : {}) };
+        const project = await projectRequest<ProjectRecord>("/api/projects", { method: "POST", body: JSON.stringify(body) });
+        setForm(null);
+        setName("");
+        setJson("");
+        if (active.current && epoch === activityEpoch.current) router.push(`/projects/${project.design.id}`);
+        return;
+      }
+      setForm(null);
       await refresh();
     } catch (cause) {
       if (cause instanceof ProjectRequestError && cause.status === 403) setWriteRejected(true);
-      setFormError((cause as Error).message);
+      setError(cause instanceof SyntaxError ? "JSON 无法解析，请检查逗号、引号和括号。" : (cause as Error).message);
     } finally {
       setBusy(false);
     }
@@ -185,8 +130,8 @@ export function ProjectLibrary({ initial }: Props) {
               <p className="text-sm leading-6 text-muted-foreground">新建项目，或导入已有设计。</p>
             </div>
             <div className="flex flex-wrap gap-2">
-              <Button variant="outline" size="touch" disabled={!writable || busy} onClick={() => openImportDialog()}><FileJson className="size-4" />导入 JSON</Button>
-              <Button size="touch" disabled={!writable || busy} onClick={() => openCreateDialog()}><Plus className="size-4" />新建项目</Button>
+              <Button variant="outline" size="touch" disabled={!writable || busy} onClick={() => { importReader.cancel(); setForm({ type: "import" }); setName(""); setJson(""); }}><FileJson className="size-4" />导入 JSON</Button>
+              <Button size="touch" disabled={!writable || busy} onClick={() => { setForm({ type: "create" }); setName(""); }}><Plus className="size-4" />新建项目</Button>
             </div>
           </section>
           {!writable && !checkError && <p role="status" className="rounded-lg border bg-muted/40 p-3 text-xs leading-5 text-muted-foreground">
@@ -195,16 +140,25 @@ export function ProjectLibrary({ initial }: Props) {
           {writeRejected && <p role="status" className="rounded-lg border bg-muted/40 p-3 text-xs leading-5 text-muted-foreground">上次写入被拒绝，请检查服务权限。</p>}
           {checkError && <p role="alert" className="rounded-lg border border-destructive/40 bg-destructive/5 p-3 text-sm leading-6 text-destructive wrap-anywhere">项目库检查失败：{checkError}切回页面可重试。</p>}
           {error && <p role="alert" className="rounded-lg border border-destructive/40 bg-destructive/5 p-3 text-sm leading-6 text-destructive wrap-anywhere">{error}</p>}
-          {form && (
-            <section className="min-w-0 rounded-lg border bg-card p-3" aria-label={form.type === "create" ? "新建项目" : form.type === "import" ? "导入项目" : "重命名项目"}>
-              <form onSubmit={submit} className="min-w-0 space-y-4">
-                <h2 className="text-sm font-semibold">{form.type === "create" ? "新建项目" : form.type === "import" ? "导入为新项目" : "重命名项目"}</h2>
-                <label className="grid min-w-0 gap-1.5 text-sm"><span className="font-medium">{form.type === "import" ? "项目名称（留空沿用 JSON 名称）" : "项目名称"}<span className="ml-1 text-xs font-normal text-muted-foreground">{form.type === "import" ? "（可选）" : "（必填）"}</span></span><Input value={name} onChange={(event) => { nameEdited.current = true; setName(event.target.value); }} required={form.type !== "import"} maxLength={120} disabled={busy} /></label>
-                {form.type === "create" && (() => {
+          <Dialog open={form !== null} onOpenChange={(open) => { if (!open && !busy) { importReader.cancel(); setForm(null); } }} modal>
+            <DialogContent>
+              <div className="flex items-center justify-between gap-2">
+                <DialogTitle>{form?.type === "create" ? "新建项目" : form?.type === "import" ? "导入为新项目" : "重命名项目"}</DialogTitle>
+                <IconButton label="关闭" onClick={() => { if (!busy) { importReader.cancel(); setForm(null); } }}><X className="size-4" /></IconButton>
+              </div>
+              <DialogDescription>
+                {form?.type === "create" && "填写项目名称，选择起始模板。"}
+                {form?.type === "import" && "粘贴或选择 JSON 文件，项目名称可选（留空沿用 JSON 名称）。"}
+                {form?.type === "rename" && `为项目 ${form.project.id} 设置新名称。`}
+              </DialogDescription>
+              {error && <p role="alert" className="rounded-lg border border-destructive/40 bg-destructive/5 p-3 text-sm leading-6 text-destructive wrap-anywhere">{error}</p>}
+              <form onSubmit={submit} className="space-y-4">
+                <label className="grid gap-1.5 text-sm"><span className="font-medium">{form?.type === "import" ? "项目名称（留空沿用 JSON 名称）" : "项目名称"}<span className="ml-1 text-xs font-normal text-muted-foreground">{form?.type === "import" ? "（可选）" : "（必填）"}</span></span><Input value={name} onChange={(event) => { nameEdited.current = true; setName(event.target.value); }} required={form?.type !== "import"} maxLength={120} disabled={busy} autoFocus /></label>
+                {form?.type === "create" && (() => {
                   const selectedTemplate = PROJECT_TEMPLATES.find((item) => item.id === (form.templateId ?? "blank"));
                   if (!selectedTemplate) throw new Error(`未知项目模板: ${String(form.templateId)}`);
                   return (
-                    <div className="grid min-w-0 gap-1.5 text-sm">
+                    <div className="grid gap-1.5 text-sm">
                       <span className="font-medium">起始构型模板</span>
                       <Select
                         value={selectedTemplate.id}
@@ -218,7 +172,7 @@ export function ProjectLibrary({ initial }: Props) {
                         }}
                         disabled={busy}
                       >
-                        <SelectTrigger size="touch" className="w-full min-w-0" aria-label="起始构型模板">
+                        <SelectTrigger size="touch" className="w-full" aria-label="起始构型模板">
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent align="start" alignItemWithTrigger={false}>
@@ -233,9 +187,9 @@ export function ProjectLibrary({ initial }: Props) {
                     </div>
                   );
                 })()}
-                {form.type === "import" && <>
-                  <label className="grid min-w-0 gap-1.5 text-sm"><span className="font-medium">粘贴设计 JSON<span className="ml-1 text-xs font-normal text-muted-foreground">（必填）</span></span><Textarea value={json} onChange={(event) => { importReader.cancel(); setJson(event.target.value); }} className="min-h-52 font-mono" required disabled={busy} spellCheck={false} /></label>
-                  <label className="grid min-w-0 gap-1.5 text-sm"><span className="font-medium">或读取 JSON 文件</span><input type="file" accept=".json,application/json" className="min-h-[var(--control-height)] w-full min-w-0 max-w-full rounded-lg border bg-background px-3 py-1 text-base outline-none file:mr-3 file:rounded-md file:border-0 file:bg-muted file:px-2 file:py-0.5 file:text-sm focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50 md:text-sm" disabled={busy} onChange={(event) => {
+                {form?.type === "import" && <>
+                  <label className="grid gap-1.5 text-sm"><span className="font-medium">粘贴设计 JSON<span className="ml-1 text-xs font-normal text-muted-foreground">（必填）</span></span><Textarea value={json} onChange={(event) => { importReader.cancel(); setJson(event.target.value); }} className="min-h-52 font-mono" required disabled={busy} spellCheck={false} /></label>
+                  <label className="grid gap-1.5 text-sm"><span className="font-medium">或读取 JSON 文件</span><input type="file" accept=".json,application/json" className="min-h-[var(--control-height)] w-full rounded-lg border bg-background px-3 py-1 text-base outline-none file:mr-3 file:rounded-md file:border-0 file:bg-muted file:px-2 file:py-0.5 file:text-sm focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50 md:text-sm" disabled={busy} onChange={(event) => {
                     const file = event.target.files?.[0];
                     event.target.value = "";
                     if (file) void importReader.read(file);
@@ -243,11 +197,11 @@ export function ProjectLibrary({ initial }: Props) {
                   {reading && <p role="status" className="text-xs leading-5 text-muted-foreground">正在读取 JSON 文件，读取完成前不会提交导入；也可直接粘贴内容以取消读取。</p>}
                   <p className="text-xs leading-5 text-muted-foreground">会生成新 ID，不覆盖已有项目。JSON 引用的型材和配件必须存在于当前共享目录库中。</p>
                 </>}
-                <div className="flex flex-wrap gap-2 border-t pt-3"><Button type="submit" size="touch" disabled={busy || reading || !writable}>{busy ? "处理中…" : form.type === "import" ? "校验并导入" : "确定"}</Button><Button type="button" variant="outline" size="touch" disabled={busy} onClick={() => { importReader.cancel(); setForm(null); }}>取消</Button></div>
+                <div className="flex gap-2 border-t pt-3"><Button type="submit" size="touch" disabled={busy || reading || !writable}>{busy ? "处理中…" : form?.type === "import" ? "校验并导入" : form?.type === "rename" ? "保存" : "创建"}</Button><Button type="button" variant="outline" size="touch" disabled={busy} onClick={() => { importReader.cancel(); setForm(null); }}>取消</Button></div>
               </form>
-            </section>
-          )}
-          {!form && <section aria-label="典型 DIY 示例" className="space-y-3 rounded-lg border bg-card p-3">
+            </DialogContent>
+          </Dialog>
+          <section aria-label="典型 DIY 示例" className="space-y-3 rounded-lg border bg-card p-3">
             <div className="space-y-1">
               <h2 className="text-sm font-semibold">从典型 DIY 示例开始</h2>
               <p className="text-xs leading-5 text-muted-foreground">同一 I 型槽 8 配套，连接角码可见、套件数量可核对。创建独立副本，不覆盖示例或已有项目。</p>
@@ -256,10 +210,10 @@ export function ProjectLibrary({ initial }: Props) {
               {PROJECT_TEMPLATES.filter((item) => item.id !== "blank").map((item) => <article key={item.id} className="flex min-w-0 flex-col gap-2 rounded-lg border bg-background p-3">
                 <h3 className="text-sm font-medium">{item.label}</h3>
                 <p className="flex-1 text-xs leading-5 text-muted-foreground">{item.summary}</p>
-                <Button size="touch" variant="outline" disabled={!writable || busy} onClick={() => { showForm({ type: "create", templateId: item.id }); setName(item.label); }}>以此示例新建<ArrowUpRight className="size-4" /></Button>
+                <Button size="touch" variant="outline" disabled={!writable || busy} onClick={() => { setForm({ type: "create", templateId: item.id }); setName(item.label); }}>以此示例新建<ArrowUpRight className="size-4" /></Button>
               </article>)}
             </div>
-          </section>}
+          </section>
           <div className="flex flex-wrap items-center gap-2">
             <Input aria-label="搜索项目" placeholder="搜索名称、说明或 ID" value={query} onChange={(event) => setQuery(event.target.value)} className="min-w-0 basis-full flex-1 sm:max-w-sm sm:basis-auto" />
             <div role="group" aria-label="项目范围" className="flex shrink-0 gap-1">
@@ -281,7 +235,7 @@ export function ProjectLibrary({ initial }: Props) {
                   <div className="mt-auto flex flex-wrap items-center gap-2 border-t pt-3">
                     {!archived && <Link href={`/projects/${project.id}`} prefetch={false} className="inline-flex min-h-[var(--control-height)] items-center gap-2 rounded-lg border border-transparent bg-secondary px-3 py-1.5 text-sm font-medium hover:bg-muted focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50">{project.status === "invalid" ? "查看问题" : "打开项目"}<ArrowUpRight className="size-4" /></Link>}
                     {archived ? <Button size="touch" variant="outline" disabled={!writable || busy} onClick={() => { void action(project, "restore"); }}><RotateCcw className="size-4" />恢复</Button> : <>
-                      <Button size="touch" variant="ghost" disabled={!writable || busy || project.status === "invalid"} onClick={() => showForm({ type: "rename", project })}>重命名</Button>
+                      <Button size="touch" variant="ghost" disabled={!writable || busy || project.status === "invalid"} onClick={() => setForm({ type: "rename", project })}>重命名</Button>
                       <Button size="icon-touch" variant="ghost" aria-label={`复制项目：${project.name}`} title="复制项目" disabled={!writable || busy || project.status === "invalid"} onClick={() => { void action(project, "copy"); }}><Copy className="size-4" /></Button>
                       <Button size="icon-touch" variant="ghost" aria-label={`归档项目：${project.name}`} title="归档项目" disabled={!writable || busy} onClick={() => setArchive(project)}><Archive className="size-4" /></Button>
                     </>}
